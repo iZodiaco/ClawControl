@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useMemo, Fragment, memo } from 'react'
 import { useStore, ToolCall } from '../store'
-import { Message, stripAnsi } from '../lib/openclaw-client'
+import { Message, stripAnsi } from '../lib/openclaw'
 import { format, isSameDay } from 'date-fns'
 import { marked } from 'marked'
 import logoUrl from '../../build/icon.png'

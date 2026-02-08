@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useStore } from '../store'
-import { Skill, CronJob } from '../lib/openclaw-client'
+import { Skill, CronJob } from '../lib/openclaw'
 
 export function RightPanel() {
   const {

@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { OpenClawClient } from './openclaw-client'
+import { OpenClawClient } from './openclaw'
 
 describe('OpenClawClient', () => {
   let client: OpenClawClient

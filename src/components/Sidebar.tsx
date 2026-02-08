@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { useStore } from '../store'
 import { formatDistanceToNow } from 'date-fns'
-import { Agent } from '../lib/openclaw-client'
+import { Agent } from '../lib/openclaw'
 import logoUrl from '../../build/icon.png'
 
 export function Sidebar() {
