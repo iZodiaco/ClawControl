@@ -10,7 +10,7 @@ import logoUrl from '../../build/icon.png'
 marked.setOptions({ breaks: true, gfm: true, async: false })
 
 export function ChatArea() {
-  const { messages, isStreaming, agents, currentAgentId, activeToolCalls } = useStore()
+  const { messages, isStreaming, hadStreamChunks, agents, currentAgentId, activeToolCalls } = useStore()
   const chatEndRef = useRef<HTMLDivElement>(null)
   const currentAgent = agents.find((a) => a.id === currentAgentId)
 
@@ -68,7 +68,7 @@ export function ChatArea() {
           </div>
         )}
 
-        {isStreaming && (
+        {isStreaming && !hadStreamChunks && (
           <div className="message agent typing-indicator-container">
             <div className="message-avatar">
               <svg viewBox="0 0 24 24" fill="currentColor">
