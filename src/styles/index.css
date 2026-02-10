@@ -244,8 +244,8 @@ a {
 }
 
 .logo-icon {
-  width: 48px;
-  height: 48px;
+  width: 32px;
+  height: 32px;
   display: block;
   object-fit: contain;
   transition: transform var(--transition-fast);
@@ -593,13 +593,15 @@ a {
 }
 
 .agent-avatar.small {
-  width: 28px;
-  height: 28px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
 }
 
 .agent-avatar.small svg {
-  width: 16px;
-  height: 16px;
+  width: 20px;
+  height: 20px;
 }
 
 .agent-info {
@@ -679,7 +681,7 @@ a {
   display: flex;
   align-items: center;
   gap: var(--space-sm);
-  padding: var(--space-sm) var(--space-md);
+  padding: var(--space-sm);
   cursor: pointer;
   transition: background var(--transition-fast);
 }
@@ -724,7 +726,12 @@ a {
 }
 
 .sidebar.collapsed .agent-info,
-.sidebar.collapsed .dropdown-arrow {
+.sidebar.collapsed .dropdown-arrow,
+.sidebar.collapsed .agent-settings-btn {
+  display: none;
+}
+
+.sidebar.collapsed .sidebar-toggle {
   display: none;
 }
 
@@ -1704,17 +1711,20 @@ a {
 
 .panel-tabs {
   display: flex;
+  flex: 1;
   gap: var(--space-xs);
 }
 
 .panel-tab {
-  padding: var(--space-xs) var(--space-md);
+  flex: 1;
+  padding: 6px var(--space-md);
   font-family: var(--font-mono);
   font-size: 0.75rem;
   font-weight: 500;
   color: var(--text-secondary);
   border-radius: var(--radius-sm);
   transition: all var(--transition-fast);
+  text-align: center;
 }
 
 .panel-tab:hover {
@@ -3778,7 +3788,7 @@ body.capacitor-mobile .thinking-label {
 .skills-sub-tab {
   flex: 1;
   padding: 6px var(--space-md);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-sm);
   font-family: var(--font-mono);
   font-size: 0.75rem;
   font-weight: 500;

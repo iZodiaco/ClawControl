@@ -93,7 +93,8 @@ export async function setAgentFile(call: RpcCaller, agentId: string, fileName: s
   try {
     await call<any>('agents.files.set', { agentId, name: fileName, content })
     return true
-  } catch {
+  } catch (err) {
+    console.warn(`[agents.files.set] Failed to write ${fileName}:`, err instanceof Error ? err.message : err)
     return false
   }
 }

@@ -23,10 +23,9 @@ function formatFileSize(bytes: number): string {
 }
 
 export function ClawHubSkillDetailView() {
-  const { selectedClawHubSkill, closeDetailView, installClawHubSkill, installingHubSkill, installHubSkillError, fetchClawHubSkillDetail, skills } = useStore()
+  const { selectedClawHubSkill, closeDetailView, fetchClawHubSkillDetail, skills } = useStore()
 
   const skill = selectedClawHubSkill
-  const isInstalling = skill ? installingHubSkill === skill.slug : false
 
   // Check if this skill is already installed locally
   const isInstalled = skill ? skills.some((s) => isSkillInstalled(s, skill.slug)) : false
@@ -39,10 +38,6 @@ export function ClawHubSkillDetailView() {
   }, [skill?.slug, fetchClawHubSkillDetail])
 
   if (!skill) return null
-
-  const handleInstall = () => {
-    installClawHubSkill(skill.slug)
-  }
 
   return (
     <div className="detail-view">
@@ -65,38 +60,15 @@ export function ClawHubSkillDetailView() {
           </div>
         </div>
         <div className="detail-actions">
-          {isInstalled ? (
+          {isInstalled && (
             <button className="clawhub-install-btn installed" disabled>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path d="M20 6L9 17l-5-5" />
               </svg>
               Installed
             </button>
-          ) : (
-            <button
-              className={`clawhub-install-btn ${isInstalling ? 'installing' : ''}`}
-              onClick={handleInstall}
-              disabled={isInstalling}
-            >
-              {isInstalling ? (
-                <>
-                  <div className="clawhub-install-spinner" />
-                  Installing...
-                </>
-              ) : (
-                <>
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4M7 10l5 5 5-5M12 15V3" />
-                  </svg>
-                  Install
-                </>
-              )}
-            </button>
           )}
         </div>
-        {installHubSkillError && (
-          <div className="clawhub-install-error">{installHubSkillError}</div>
-        )}
       </div>
 
       <div className="detail-content">

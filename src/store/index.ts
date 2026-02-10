@@ -742,46 +742,65 @@ export const useStore = create<AppState>()(
       selectClawHubSkill: (skill) => {
         set({ mainView: 'clawhub-skill-detail', selectedClawHubSkill: skill, selectedSkill: null, selectedCronJob: null, selectedAgentDetail: null })
       },
+      // TODO: ClawHub skill install requires a server-side RPC (e.g. skills.upload)
+      // to transfer files to the remote server. agents.files.set only supports
+      // workspace files (IDENTITY.md, SOUL.md, etc.), and local filesystem
+      // extraction doesn't reach the server. Options: add skills.upload to
+      // openclaw server, or pair a node on the server machine.
       installClawHubSkill: async (slug) => {
         set({ installingHubSkill: slug, installHubSkillError: null })
 
-        // Detect skills directory from installed skills' file paths
-        const { skills } = get()
-        let skillsDir: string | undefined
-        for (const s of skills) {
-          if (s.filePath) {
-            // e.g. /home/user/.openclaw/skills/my-skill/SKILL.md → /home/user/.openclaw/skills
-            const parts = s.filePath.replace(/\\/g, '/').split('/')
-            const skillsIdx = parts.lastIndexOf('skills')
-            if (skillsIdx > 0) {
-              skillsDir = parts.slice(0, skillsIdx + 1).join('/')
-              break
-            }
-          }
+        const { client, currentAgentId } = get()
+        if (!client) {
+          set({ installHubSkillError: 'Not connected to server', installingHubSkill: null })
+          return
         }
 
         try {
-          // Primary: download ZIP and extract via Electron
-          await Platform.clawhubInstall(slug, skillsDir)
-          await get().fetchSkills()
-        } catch (localErr) {
-          // Fallback: try via server node.invoke (remote server with paired nodes)
-          const { client } = get()
-          if (client) {
-            try {
-              await client.installHubSkill(slug)
-              await get().fetchSkills()
-            } catch (remoteErr) {
-              const msg = remoteErr instanceof Error ? remoteErr.message : 'Install failed'
-              console.error('ClawHub skill install failed:', msg)
-              set({ installHubSkillError: msg })
+          // Get the agent's workspace path from the server
+          const agentId = currentAgentId || 'main'
+          console.log(`[clawhub] Getting workspace for agent: ${agentId}`)
+          const agentFiles = await client.getAgentFiles(agentId)
+          console.log(`[clawhub] Agent files result:`, agentFiles)
+          let workspace = agentFiles?.workspace
+          if (!workspace) {
+            // Fallback: detect from existing skills' file paths
+            console.log('[clawhub] No workspace from server, trying fallback from skill paths...')
+            const { skills } = get()
+            console.log(`[clawhub] Existing skills:`, skills.map(s => ({ name: s.name, filePath: s.filePath })))
+            for (const s of skills) {
+              if (s.filePath) {
+                const parts = s.filePath.replace(/\\/g, '/').split('/')
+                const skillsIdx = parts.lastIndexOf('skills')
+                if (skillsIdx > 0) {
+                  workspace = parts.slice(0, skillsIdx).join('/')
+                  break
+                }
+              }
             }
-          } else {
-            const msg = localErr instanceof Error ? localErr.message : 'Install failed'
-            console.error('ClawHub skill install failed:', msg)
-            set({ installHubSkillError: msg })
           }
+          if (!workspace) {
+            throw new Error('Could not determine agent workspace path')
+          }
+          console.log(`[clawhub] Workspace: ${workspace}`)
+
+          // Download ZIP and extract to <workspace>/skills/<slug>/
+          const targetDir = `${workspace.replace(/\\/g, '/')}/skills/${slug}`
+          console.log(`[clawhub] Installing ${slug} to ${targetDir}`)
+          const files = await Platform.clawhubInstall(slug, targetDir)
+          console.log(`[clawhub] Extracted ${files.length} files:`, files)
+
+          // Refresh skills list from server
+          console.log('[clawhub] Refreshing skills list...')
+          await get().fetchSkills()
+          const { skills: updatedSkills } = get()
+          console.log(`[clawhub] Skills after refresh (${updatedSkills.length}):`, updatedSkills.map(s => s.name))
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'Install failed'
+          console.error('[clawhub] Install failed:', msg)
+          set({ installHubSkillError: msg })
         }
+
         set({ installingHubSkill: null })
       },
       fetchClawHubSkillDetail: async (slug) => {

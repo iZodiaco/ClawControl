@@ -286,53 +286,104 @@ ipcMain.handle('net:fetchUrl', async (_event, url: string, options?: { method?: 
   })
 })
 
-// Install a skill from ClawHub by downloading ZIP and extracting to skills dir
-ipcMain.handle('clawhub:install', async (_event, slug: string, skillsDir?: string) => {
+// Extract ZIP buffer to a target directory using pure Node.js (no external commands)
+async function extractZipToDir(zipBuffer: Buffer, targetDir: string): Promise<string[]> {
+  const fs = await import('fs/promises')
+  const path = await import('path')
+  const zlib = await import('zlib')
+  const extractedFiles: string[] = []
+
+  // Find End of Central Directory record (signature 0x06054b50)
+  let eocdOffset = -1
+  for (let i = zipBuffer.length - 22; i >= Math.max(0, zipBuffer.length - 65557); i--) {
+    if (zipBuffer.readUInt32LE(i) === 0x06054b50) {
+      eocdOffset = i
+      break
+    }
+  }
+  if (eocdOffset === -1) throw new Error('Invalid ZIP file: no end-of-central-directory record')
+
+  const cdEntries = zipBuffer.readUInt16LE(eocdOffset + 10)
+  const cdOffset = zipBuffer.readUInt32LE(eocdOffset + 16)
+
+  // Collect file entries from central directory
+  const entries: Array<{ fileName: string; compressionMethod: number; compressedSize: number; localHeaderOffset: number }> = []
+  let offset = cdOffset
+  for (let i = 0; i < cdEntries; i++) {
+    if (offset + 46 > zipBuffer.length) break
+    if (zipBuffer.readUInt32LE(offset) !== 0x02014b50) break
+
+    const compressionMethod = zipBuffer.readUInt16LE(offset + 10)
+    const compressedSize = zipBuffer.readUInt32LE(offset + 20)
+    const fileNameLength = zipBuffer.readUInt16LE(offset + 28)
+    const extraFieldLength = zipBuffer.readUInt16LE(offset + 30)
+    const commentLength = zipBuffer.readUInt16LE(offset + 32)
+    const localHeaderOffset = zipBuffer.readUInt32LE(offset + 42)
+    const fileName = zipBuffer.toString('utf8', offset + 46, offset + 46 + fileNameLength)
+    offset += 46 + fileNameLength + extraFieldLength + commentLength
+
+    if (fileName.includes('..') || path.isAbsolute(fileName)) continue
+    entries.push({ fileName, compressionMethod, compressedSize, localHeaderOffset })
+  }
+
+  // Strip common root directory prefix if all entries share one
+  const firstSlash = entries.length > 0 ? entries[0].fileName.indexOf('/') : -1
+  let stripPrefix = ''
+  if (firstSlash > 0) {
+    const candidate = entries[0].fileName.substring(0, firstSlash + 1)
+    if (entries.every(e => e.fileName.startsWith(candidate))) {
+      stripPrefix = candidate
+    }
+  }
+
+  // Extract files
+  for (const entry of entries) {
+    const relativeName = stripPrefix ? entry.fileName.substring(stripPrefix.length) : entry.fileName
+    if (!relativeName || relativeName.endsWith('/')) continue
+
+    const localFileNameLen = zipBuffer.readUInt16LE(entry.localHeaderOffset + 26)
+    const localExtraLen = zipBuffer.readUInt16LE(entry.localHeaderOffset + 28)
+    const dataOffset = entry.localHeaderOffset + 30 + localFileNameLen + localExtraLen
+
+    let fileData: Buffer
+    if (entry.compressionMethod === 0) {
+      fileData = zipBuffer.subarray(dataOffset, dataOffset + entry.compressedSize)
+    } else if (entry.compressionMethod === 8) {
+      const compressed = zipBuffer.subarray(dataOffset, dataOffset + entry.compressedSize)
+      fileData = zlib.inflateRawSync(compressed)
+    } else {
+      console.warn(`[clawhub] Skipping ${relativeName}: unsupported compression method ${entry.compressionMethod}`)
+      continue
+    }
+
+    const filePath = path.join(targetDir, relativeName)
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
+    await fs.writeFile(filePath, fileData)
+    extractedFiles.push(relativeName)
+  }
+
+  return extractedFiles
+}
+
+// Download a ClawHub skill ZIP and extract to a target directory
+ipcMain.handle('clawhub:install', async (_event, slug: string, targetDir: string) => {
   // Validate slug
   if (!/^[a-zA-Z0-9_-]+$/.test(slug)) {
     throw new Error(`Invalid skill slug: ${slug}`)
   }
 
   const fs = await import('fs/promises')
-  const path = await import('path')
-  const os = await import('os')
-  const { exec } = await import('child_process')
-  const { promisify } = await import('util')
-  const execAsync = promisify(exec)
-
-  // Determine the skills directory
-  let targetSkillsDir = skillsDir
-  if (!targetSkillsDir) {
-    // Try common OpenClaw workspace locations
-    const home = os.homedir()
-    const candidates = [
-      path.join(home, '.openclaw', 'skills'),
-      path.join(home, '.clawdbot', 'skills'),
-    ]
-    for (const candidate of candidates) {
-      try {
-        await fs.access(candidate)
-        targetSkillsDir = candidate
-        break
-      } catch { /* not found */ }
-    }
-    // Create default if none found
-    if (!targetSkillsDir) {
-      targetSkillsDir = path.join(home, '.openclaw', 'skills')
-      await fs.mkdir(targetSkillsDir, { recursive: true })
-    }
-  }
-
-  const targetDir = path.join(targetSkillsDir, slug)
 
   // Download ZIP from ClawHub API
   const { net } = await import('electron')
   const downloadUrl = `https://clawhub.ai/api/v1/download?slug=${encodeURIComponent(slug)}`
+  console.log(`[clawhub] Downloading ${slug} from ${downloadUrl}`)
 
   const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
     const request = net.request({ url: downloadUrl, method: 'GET' })
     const chunks: Buffer[] = []
     request.on('response', (response) => {
+      console.log(`[clawhub] Download response: HTTP ${response.statusCode}`)
       if (response.statusCode && (response.statusCode < 200 || response.statusCode >= 300)) {
         reject(new Error(`Download failed: HTTP ${response.statusCode}`))
         return
@@ -345,24 +396,15 @@ ipcMain.handle('clawhub:install', async (_event, slug: string, skillsDir?: strin
     request.end()
   })
 
-  // Write ZIP to temp file, extract to target directory
-  const tmpDir = os.tmpdir()
-  const zipPath = path.join(tmpDir, `clawhub-${slug}-${Date.now()}.zip`)
-  await fs.writeFile(zipPath, zipBuffer)
+  console.log(`[clawhub] Downloaded ${zipBuffer.length} bytes, extracting to ${targetDir}`)
 
-  try {
-    // Remove existing skill dir if present
-    await fs.rm(targetDir, { recursive: true, force: true })
-    await fs.mkdir(targetDir, { recursive: true })
+  // Remove existing skill dir if present, then extract
+  await fs.rm(targetDir, { recursive: true, force: true })
+  await fs.mkdir(targetDir, { recursive: true })
+  const extractedFiles = await extractZipToDir(zipBuffer, targetDir)
+  console.log(`[clawhub] Extracted ${extractedFiles.length} files:`, extractedFiles)
 
-    // Extract ZIP
-    await execAsync(`unzip -o -q "${zipPath}" -d "${targetDir}"`, { timeout: 30000 })
-
-    return { ok: true, output: `Installed to ${targetDir}` }
-  } finally {
-    // Clean up temp file
-    await fs.unlink(zipPath).catch(() => {})
-  }
+  return { ok: true, files: extractedFiles }
 })
 
 // Trust a hostname for certificate errors (persisted across app restarts)
