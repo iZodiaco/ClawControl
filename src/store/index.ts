@@ -481,7 +481,7 @@ export const useStore = create<AppState>()(
         const session = await client.createSession(currentAgentId || undefined)
         const sessionId = session.key || session.id
         set((state) => ({
-          sessions: [session, ...state.sessions],
+          sessions: [session, ...state.sessions.filter(s => (s.key || s.id) !== sessionId)],
           currentSessionId: sessionId,
           messages: [],
           isStreaming: false,
@@ -514,9 +514,10 @@ export const useStore = create<AppState>()(
         if (!client) return
 
         const session = await client.spawnSession(agentId, prompt)
+        const sessionId = session.key || session.id
         set((state) => ({
-          sessions: [session, ...state.sessions],
-          currentSessionId: session.key || session.id,
+          sessions: [session, ...state.sessions.filter(s => (s.key || s.id) !== sessionId)],
+          currentSessionId: sessionId,
           messages: []
         }))
 
@@ -1188,7 +1189,7 @@ export const useStore = create<AppState>()(
           const session = await client.createSession(currentAgentId || undefined)
           sessionId = session.key || session.id
           set((state) => ({
-            sessions: [session, ...state.sessions],
+            sessions: [session, ...state.sessions.filter(s => (s.key || s.id) !== sessionId)],
             currentSessionId: sessionId,
             messages: []
           }))
@@ -1235,14 +1236,22 @@ export const useStore = create<AppState>()(
         const serverSessions = await client.listSessions()
 
         set((state) => {
+          // Deduplicate server sessions by key to prevent duplicate React keys
+          const seen = new Set<string>()
+          const uniqueServerSessions = serverSessions.filter(s => {
+            const key = s.key || s.id
+            if (seen.has(key)) return false
+            seen.add(key)
+            return true
+          })
+
           // Preserve local-only sessions (created but no message sent yet)
           // that aren't in the server's response.
-          const serverKeys = new Set(serverSessions.map(s => s.key || s.id))
           const localOnly = state.sessions.filter(s => {
             const key = s.key || s.id
-            return !serverKeys.has(key) && key.startsWith('agent:')
+            return !seen.has(key) && key.startsWith('agent:')
           })
-          return { sessions: [...serverSessions, ...localOnly] }
+          return { sessions: [...uniqueServerSessions, ...localOnly] }
         })
       },
 
