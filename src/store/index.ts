@@ -493,6 +493,7 @@ export const useStore = create<AppState>()(
         }))
       },
       deleteSession: (sessionId) => {
+        if (sessionId === 'agent:main:main') return
         const { client } = get()
         client?.deleteSession(sessionId)
         set((state) => ({

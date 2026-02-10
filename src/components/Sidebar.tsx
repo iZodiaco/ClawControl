@@ -116,18 +116,20 @@ export function Sidebar() {
                 {unreadCounts[session.key || session.id] > 0 && (
                   <span className="session-badge">{unreadCounts[session.key || session.id]}</span>
                 )}
-                <button
-                  className="session-delete"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    deleteSession(session.key || session.id)
-                  }}
-                  aria-label="Delete session"
-                >
-                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M18 6L6 18M6 6l12 12" />
-                  </svg>
-                </button>
+                {(session.key || session.id) !== 'agent:main:main' && (
+                  <button
+                    className="session-delete"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      deleteSession(session.key || session.id)
+                    }}
+                    aria-label="Delete session"
+                  >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M18 6L6 18M6 6l12 12" />
+                    </svg>
+                  </button>
+                )}
               </div>
             ))}
 
