@@ -34,13 +34,10 @@ export class OpenClawClient {
   private activeRunId: string | null = null
   private activeSessionKey: string | null = null
   private primarySessionKey: string | null = null
-  _debugId = Math.random().toString(36).slice(2, 8)
-
   constructor(url: string, token: string = '', authMode: 'token' | 'password' = 'token') {
     this.url = url
     this.token = token
     this.authMode = authMode
-    console.log('[ClawControl] new OpenClawClient created, debugId:', this._debugId)
   }
 
   // Event handling
@@ -57,9 +54,6 @@ export class OpenClawClient {
 
   private emit(event: string, ...args: unknown[]): void {
     const handlers = this.eventHandlers.get(event)
-    if (event === 'streamChunk') {
-      console.log('[ClawControl] client.emit(streamChunk) handlerCount:', handlers?.size ?? 0, 'clientId:', this._debugId)
-    }
     handlers?.forEach((handler) => {
       try {
         handler(...args)
@@ -406,10 +400,6 @@ export class OpenClawClient {
   // Notification / event handling
 
   private handleNotification(event: string, payload: any): void {
-    if (event === 'agent' && payload.stream === 'assistant') {
-      console.log('[ClawControl] handleNotification agent:assistant clientId:', this._debugId, 'activeStreamSource:', this.activeStreamSource)
-    }
-
     const eventSessionKey = payload?.sessionKey as string | undefined
 
     // When a primary session filter is active and an event arrives from a

@@ -762,15 +762,11 @@ export const useStore = create<AppState>()(
         try {
           // Get the agent's workspace path from the server
           const agentId = currentAgentId || 'main'
-          console.log(`[clawhub] Getting workspace for agent: ${agentId}`)
           const agentFiles = await client.getAgentFiles(agentId)
-          console.log(`[clawhub] Agent files result:`, agentFiles)
           let workspace = agentFiles?.workspace
           if (!workspace) {
             // Fallback: detect from existing skills' file paths
-            console.log('[clawhub] No workspace from server, trying fallback from skill paths...')
             const { skills } = get()
-            console.log(`[clawhub] Existing skills:`, skills.map(s => ({ name: s.name, filePath: s.filePath })))
             for (const s of skills) {
               if (s.filePath) {
                 const parts = s.filePath.replace(/\\/g, '/').split('/')
@@ -785,19 +781,12 @@ export const useStore = create<AppState>()(
           if (!workspace) {
             throw new Error('Could not determine agent workspace path')
           }
-          console.log(`[clawhub] Workspace: ${workspace}`)
-
           // Download ZIP and extract to <workspace>/skills/<slug>/
           const targetDir = `${workspace.replace(/\\/g, '/')}/skills/${slug}`
-          console.log(`[clawhub] Installing ${slug} to ${targetDir}`)
-          const files = await Platform.clawhubInstall(slug, targetDir)
-          console.log(`[clawhub] Extracted ${files.length} files:`, files)
+          await Platform.clawhubInstall(slug, targetDir)
 
           // Refresh skills list from server
-          console.log('[clawhub] Refreshing skills list...')
           await get().fetchSkills()
-          const { skills: updatedSkills } = get()
-          console.log(`[clawhub] Skills after refresh (${updatedSkills.length}):`, updatedSkills.map(s => s.name))
         } catch (err) {
           const msg = err instanceof Error ? err.message : 'Install failed'
           console.error('[clawhub] Install failed:', msg)
@@ -898,7 +887,6 @@ export const useStore = create<AppState>()(
 
         // Prevent concurrent connect() calls (React StrictMode fires effects twice)
         if (connecting) {
-          console.log('[ClawControl] connect() skipped — already connecting')
           return
         }
 
@@ -910,7 +898,6 @@ export const useStore = create<AppState>()(
 
         // Disconnect existing client to prevent duplicate event handling
         if (existingClient) {
-          console.log('[ClawControl] connect() disconnecting existing client')
           existingClient.disconnect()
           set({ client: null })
         }
@@ -918,12 +905,10 @@ export const useStore = create<AppState>()(
         // Also kill any stale client surviving across Vite HMR reloads.
         const stale = (globalThis as any).__clawdeskClient as OpenClawClient | undefined
         if (stale && stale !== existingClient) {
-          console.log('[ClawControl] connect() disconnecting stale HMR client')
           try { stale.disconnect() } catch { /* already closed */ }
         }
 
         set({ connecting: true })
-        console.log('[ClawControl] connect() starting new connection')
 
         try {
           const { authMode } = get()
@@ -1011,8 +996,6 @@ export const useStore = create<AppState>()(
               : { text: String(chunkArg) }
             const text = chunk.text || ''
             const sessionKey = chunk.sessionKey
-            console.log('[ClawControl] streamChunk received, len:', text.length, 'preview:', JSON.stringify(text.slice(0, 40)))
-
             // Skip empty chunks
             if (!text) return
 

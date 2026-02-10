@@ -377,13 +377,10 @@ ipcMain.handle('clawhub:install', async (_event, slug: string, targetDir: string
   // Download ZIP from ClawHub API
   const { net } = await import('electron')
   const downloadUrl = `https://clawhub.ai/api/v1/download?slug=${encodeURIComponent(slug)}`
-  console.log(`[clawhub] Downloading ${slug} from ${downloadUrl}`)
-
   const zipBuffer = await new Promise<Buffer>((resolve, reject) => {
     const request = net.request({ url: downloadUrl, method: 'GET' })
     const chunks: Buffer[] = []
     request.on('response', (response) => {
-      console.log(`[clawhub] Download response: HTTP ${response.statusCode}`)
       if (response.statusCode && (response.statusCode < 200 || response.statusCode >= 300)) {
         reject(new Error(`Download failed: HTTP ${response.statusCode}`))
         return
@@ -396,13 +393,10 @@ ipcMain.handle('clawhub:install', async (_event, slug: string, targetDir: string
     request.end()
   })
 
-  console.log(`[clawhub] Downloaded ${zipBuffer.length} bytes, extracting to ${targetDir}`)
-
   // Remove existing skill dir if present, then extract
   await fs.rm(targetDir, { recursive: true, force: true })
   await fs.mkdir(targetDir, { recursive: true })
   const extractedFiles = await extractZipToDir(zipBuffer, targetDir)
-  console.log(`[clawhub] Extracted ${extractedFiles.length} files:`, extractedFiles)
 
   return { ok: true, files: extractedFiles }
 })

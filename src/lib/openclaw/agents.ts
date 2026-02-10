@@ -143,11 +143,6 @@ export async function getConfig(call: RpcCaller): Promise<{ config: any; hash: s
   const config = result?.config ?? null
   const hash = result?.hash ?? ''
 
-  console.log('[ClawControl] config.get response keys:', Object.keys(result || {}))
-  console.log('[ClawControl] config.agents type:', typeof config?.agents,
-    'agents.list type:', typeof config?.agents?.list,
-    'agents.list length:', Array.isArray(config?.agents?.list) ? config.agents.list.length : 'N/A')
-
   return { config, hash }
 }
 
@@ -180,8 +175,6 @@ export async function createAgent(call: RpcCaller, params: CreateAgentParams): P
   const agentsSection = config.agents || {}
   const existingList: any[] = Array.isArray(agentsSection.list) ? agentsSection.list : []
 
-  console.log('[ClawControl] Existing agents in config:', existingList.map((a: any) => a.id || a.name))
-
   // 3. Check for duplicates
   if (existingList.some((a: any) => normalizeAgentId(a.id || a.name || '') === agentId)) {
     throw new Error(`Agent "${agentId}" already exists`)
@@ -204,8 +197,6 @@ export async function createAgent(call: RpcCaller, params: CreateAgentParams): P
   //      - leaves agents.defaults and all other config sections untouched
   const newList = [...existingList, newAgent]
   const patch = { agents: { list: newList } }
-
-  console.log('[ClawControl] Patching config with', newList.length, 'agents (was', existingList.length, ')')
 
   await call<any>('config.patch', { raw: JSON.stringify(patch), baseHash: hash })
 
@@ -252,8 +243,6 @@ export async function deleteAgent(call: RpcCaller, agentId: string): Promise<Del
   }
 
   const patch = { agents: { list: filteredList } }
-
-  console.log('[ClawControl] Deleting agent, patching config with', filteredList.length, 'agents (was', existingList.length, ')')
 
   await call<any>('config.patch', { raw: JSON.stringify(patch), baseHash: hash })
 
