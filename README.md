@@ -1,35 +1,54 @@
 # ClawControl
 
-A desktop client for OpenClaw AI assistant. Built with Electron, React, and TypeScript.
+A cross-platform desktop and mobile client for OpenClaw AI assistant. Built with Electron, React, and TypeScript.
+
+> **Latest Release: [v1.1.0](https://github.com/jakeledwards/ClawControl/releases/tag/v1.1.0)** — Download the [installer](https://github.com/jakeledwards/ClawControl/releases/download/v1.1.0/ClawControl.Setup.1.1.0.exe) or [portable exe](https://github.com/jakeledwards/ClawControl/releases/download/v1.1.0/ClawControl.1.1.0.exe) for Windows.
 
 ## Features
 
-- **Chat Interface**: Clean, modern chat UI with message bubbles, streaming support, and markdown rendering
+- **Chat Interface**: Clean, modern chat UI with streaming support, markdown rendering, and code block copy buttons
 - **Thinking Mode**: Toggle extended thinking for complex tasks with visible reasoning display
-- **Agent Selection**: Switch between different AI agents
-- **Agent Profile View**: Browse agent details, configuration, and edit workspace files directly
+- **Agent Selection**: Switch between different AI agents with per-session agent identity
+- **Agent Management**: Create, delete, and browse agent profiles, configuration, and workspace files
 - **Sessions Management**: Create, view, and manage chat sessions with unread message indicators
-- **Subagent Spawning**: Spawn isolated subagent sessions for parallel task execution
-- **Skills Viewer**: Browse available agent skills, their triggers, and toggle enablement
+- **Subagent Spawning**: Spawn isolated subagent sessions for parallel task execution, with inline status blocks and popout windows
+- **ClawHub Skill Browser**: Search and browse available skills with VirusTotal security scan badges, download stats, and one-click install
+- **Tool Call Visibility**: See tool calls inline during chat as the agent works
+- **Stop Button**: Abort in-progress chat streams at any time
 - **Cron Jobs**: View and manage scheduled tasks with live status updates
 - **Dark/Light Theme**: Full theme support with system preference detection
-- **Cross-Platform**: Windows and macOS support
+- **Cross-Platform**: Windows, macOS, iOS, and Android support via Electron and Capacitor
 
 ## Screenshots
 
 <p align="center">
   <img src="screenshots/home.png" width="600" alt="Main Chat Interface">
-  <br><em>Main chat interface with sidebar and skills panel</em>
+  <br><em>Main chat interface with session sidebar and quick-start prompts</em>
 </p>
 
 <p align="center">
   <img src="screenshots/agent.png" width="600" alt="Agent Profile">
-  <br><em>Agent profile view</em>
+  <br><em>Agent profile view with configuration and workspace files</em>
 </p>
 
 <p align="center">
   <img src="screenshots/skills.png" width="600" alt="Skills Panel">
-  <br><em>Skills browser</em>
+  <br><em>Installed skills panel</em>
+</p>
+
+<p align="center">
+  <img src="screenshots/skillsearch.png" width="600" alt="ClawHub Skill Browser">
+  <br><em>ClawHub skill browser with search, security scan badges, and skill details</em>
+</p>
+
+<p align="center">
+  <img src="screenshots/subagents.png" width="600" alt="Subagent Blocks">
+  <br><em>Inline subagent status blocks with popout links</em>
+</p>
+
+<p align="center">
+  <img src="screenshots/subagentchat.png" width="600" alt="Subagent Chat Window">
+  <br><em>Subagent popout window showing an isolated conversation</em>
 </p>
 
 <p align="center">
@@ -39,15 +58,35 @@ A desktop client for OpenClaw AI assistant. Built with Electron, React, and Type
 
 <p align="center">
   <img src="screenshots/connect.png" width="600" alt="Connection Settings">
-  <br><em>Connection settings</em>
+  <br><em>Connection and authentication settings</em>
 </p>
 
-## Installation
+## Download
+
+Pre-built Windows binaries are available on the [Releases](https://github.com/jakeledwards/ClawControl/releases) page:
+
+- **ClawControl Setup 1.1.0.exe** — Windows installer
+- **ClawControl 1.1.0.exe** — Portable executable (no installation required)
+
+### What's New in v1.1.0
+
+- Stop button to abort in-progress chat streams
+- Copy button on code blocks
+- Subagent inline status blocks and popout windows
+- ClawHub skill browser with VirusTotal security scan badges
+- Agent create and delete support
+- Tool call visibility in chat
+- Capacitor mobile support (iOS and Android)
+- Numerous streaming and session fixes
+
+See the full [release notes](https://github.com/jakeledwards/ClawControl/releases/tag/v1.1.0) for details.
+
+## Installation (from source)
 
 ```bash
 # Clone the repository
-git clone git@github.com:jakeledwards/openclaw-widget.git
-cd openclaw-widget
+git clone git@github.com:jakeledwards/ClawControl.git
+cd ClawControl
 
 # Install dependencies
 npm install
@@ -177,7 +216,13 @@ clawcontrol/
 │   │   ├── CronJobDetailView.tsx
 │   │   └── AgentDetailView.tsx
 │   ├── lib/
-│   │   └── openclaw-client.ts  # WebSocket client
+│   │   ├── openclaw-client/   # Modular WebSocket client
+│   │   │   ├── index.ts       # Client entry point
+│   │   │   ├── connection.ts  # Connection & handshake
+│   │   │   ├── sessions.ts    # Session management
+│   │   │   ├── chat.ts        # Chat & streaming
+│   │   │   └── ...
+│   │   └── platform.ts       # Platform abstraction (Electron/Capacitor/web)
 │   ├── store/
 │   │   └── index.ts       # Zustand state management
 │   ├── styles/
@@ -185,7 +230,8 @@ clawcontrol/
 │   ├── App.tsx
 │   └── main.tsx
 ├── build/                 # App icons and build assets
-└── scripts/               # Utility scripts
+├── scripts/               # Utility scripts
+└── capacitor.config.ts    # Capacitor mobile config
 ```
 
 ## OpenClaw API
@@ -365,6 +411,7 @@ Chat responses stream via `event` frames:
 ## Tech Stack
 
 - **Electron** - Desktop app framework
+- **Capacitor** - Native mobile (iOS/Android)
 - **React 18** - UI framework
 - **TypeScript** - Type safety
 - **Vite** - Build tool
