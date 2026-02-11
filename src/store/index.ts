@@ -60,6 +60,8 @@ interface AppState {
   setSidebarOpen: (open: boolean) => void
   sidebarCollapsed: boolean
   setSidebarCollapsed: (collapsed: boolean) => void
+  collapsedSessionGroups: string[]
+  toggleSessionGroup: (label: string) => void
   rightPanelOpen: boolean
   setRightPanelOpen: (open: boolean) => void
   rightPanelTab: 'skills' | 'crons'
@@ -83,10 +85,9 @@ interface AppState {
   messages: Message[]
   addMessage: (message: Message) => void
   clearMessages: () => void
-  isStreaming: boolean
-  setIsStreaming: (streaming: boolean) => void
-  hadStreamChunks: boolean
-  activeToolCalls: ToolCall[]
+  streamingSessions: Record<string, boolean>
+  sessionHadChunks: Record<string, boolean>
+  sessionToolCalls: Record<string, ToolCall[]>
   thinkingEnabled: boolean
   setThinkingEnabled: (enabled: boolean) => void
 
@@ -226,6 +227,15 @@ export const useStore = create<AppState>()(
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
       sidebarCollapsed: false,
       setSidebarCollapsed: (collapsed) => set({ sidebarCollapsed: collapsed }),
+      collapsedSessionGroups: [],
+      toggleSessionGroup: (label) => set((state) => {
+        const groups = state.collapsedSessionGroups
+        return {
+          collapsedSessionGroups: groups.includes(label)
+            ? groups.filter(g => g !== label)
+            : [...groups, label]
+        }
+      }),
       rightPanelOpen: true,
       setRightPanelOpen: (open) => set({ rightPanelOpen: open }),
       rightPanelTab: 'skills',
@@ -357,10 +367,9 @@ export const useStore = create<AppState>()(
       messages: [],
       addMessage: (message) => set((state) => ({ messages: [...state.messages, message] })),
       clearMessages: () => set({ messages: [] }),
-      isStreaming: false,
-      setIsStreaming: (streaming) => set({ isStreaming: streaming }),
-      hadStreamChunks: false,
-      activeToolCalls: [],
+      streamingSessions: {},
+      sessionHadChunks: {},
+      sessionToolCalls: {},
       thinkingEnabled: false,
       setThinkingEnabled: (enabled) => set({ thinkingEnabled: enabled }),
 
@@ -486,8 +495,6 @@ export const useStore = create<AppState>()(
           sessions: [session, ...state.sessions.filter(s => (s.key || s.id) !== sessionId)],
           currentSessionId: sessionId,
           messages: [],
-          isStreaming: false,
-          hadStreamChunks: false,
           activeSubagents: [],
           streamingSessionId: null
         }))
@@ -496,10 +503,18 @@ export const useStore = create<AppState>()(
         if (sessionId === 'agent:main:main') return
         const { client } = get()
         client?.deleteSession(sessionId)
-        set((state) => ({
-          sessions: state.sessions.filter((s) => (s.key || s.id) !== sessionId),
-          currentSessionId: state.currentSessionId === sessionId ? null : state.currentSessionId
-        }))
+        set((state) => {
+          const { [sessionId]: _s, ...restStreaming } = state.streamingSessions
+          const { [sessionId]: _h, ...restChunks } = state.sessionHadChunks
+          const { [sessionId]: _t, ...restToolCalls } = state.sessionToolCalls
+          return {
+            sessions: state.sessions.filter((s) => (s.key || s.id) !== sessionId),
+            currentSessionId: state.currentSessionId === sessionId ? null : state.currentSessionId,
+            streamingSessions: restStreaming,
+            sessionHadChunks: restChunks,
+            sessionToolCalls: restToolCalls,
+          }
+        })
       },
       updateSessionLabel: async (sessionId, label) => {
         const { client } = get()
@@ -920,7 +935,18 @@ export const useStore = create<AppState>()(
             const msgPayload = msgArg as Message & { sessionKey?: string }
             const sessionKey = msgPayload.sessionKey
             const { currentSessionId } = get()
-            if (sessionKey && currentSessionId && sessionKey !== currentSessionId) return
+            const resolvedKey = sessionKey || currentSessionId
+            const isCurrentSession = !sessionKey || !currentSessionId || sessionKey === currentSessionId
+
+            // For non-current sessions, just clear streaming state
+            if (!isCurrentSession) {
+              if (resolvedKey) {
+                set((state) => ({
+                  streamingSessions: { ...state.streamingSessions, [resolvedKey]: false }
+                }))
+              }
+              return
+            }
 
             const message: Message = {
               id: msgPayload.id,
@@ -932,30 +958,30 @@ export const useStore = create<AppState>()(
             let replacedStreaming = false
 
             set((state) => {
+              const streamingSessions = resolvedKey
+                ? { ...state.streamingSessions, [resolvedKey]: false }
+                : state.streamingSessions
+
               // Replace streaming placeholder with the final server message
               const lastIdx = state.messages.length - 1
               const lastMsg = lastIdx >= 0 ? state.messages[lastIdx] : null
               if (lastMsg && lastMsg.role === 'assistant' && lastMsg.id.startsWith('streaming-')) {
                 replacedStreaming = true
-                // Replace the streaming placeholder with the canonical server
-                // content.  If a lifecycle:end event arrived before the final
-                // chat message, the streamed text may be truncated — using the
-                // server's authoritative text ensures completeness.
                 const updated = [...state.messages]
                 updated[lastIdx] = { ...message }
-                return { messages: updated, isStreaming: false }
+                return { messages: updated, streamingSessions }
               }
 
               const exists = state.messages.some(m => m.id === message.id)
               if (exists) {
                 return {
                   messages: state.messages.map(m => m.id === message.id ? message : m),
-                  isStreaming: false
+                  streamingSessions
                 }
               }
               return {
                 messages: [...state.messages, message],
-                isStreaming: false
+                streamingSessions
               }
             })
 
@@ -974,7 +1000,7 @@ export const useStore = create<AppState>()(
           })
 
           client.on('disconnected', () => {
-            set({ connected: false, isStreaming: false, hadStreamChunks: false, activeToolCalls: [] })
+            set({ connected: false, streamingSessions: {}, sessionHadChunks: {}, sessionToolCalls: {} })
             get().stopSubagentPolling()
           })
 
@@ -986,9 +1012,16 @@ export const useStore = create<AppState>()(
           client.on('streamStart', (payload: unknown) => {
             const { sessionKey } = (payload || {}) as { sessionKey?: string }
             const { currentSessionId } = get()
-            if (sessionKey && currentSessionId && sessionKey !== currentSessionId) return
-            set({ isStreaming: true, hadStreamChunks: false })
-            get().startSubagentPolling()
+            const resolvedKey = sessionKey || currentSessionId
+            if (resolvedKey) {
+              set((state) => ({
+                streamingSessions: { ...state.streamingSessions, [resolvedKey]: true },
+                sessionHadChunks: { ...state.sessionHadChunks, [resolvedKey]: false },
+              }))
+            }
+            if (!sessionKey || !currentSessionId || sessionKey === currentSessionId) {
+              get().startSubagentPolling()
+            }
           })
 
           client.on('streamChunk', (chunkArg: unknown) => {
@@ -1000,11 +1033,27 @@ export const useStore = create<AppState>()(
             // Skip empty chunks
             if (!text) return
 
-            // Session filtering
             const { currentSessionId } = get()
-            if (sessionKey && currentSessionId && sessionKey !== currentSessionId) return
+            const resolvedKey = sessionKey || currentSessionId
+            const isCurrentSession = !sessionKey || !currentSessionId || sessionKey === currentSessionId
+
+            // For non-current sessions, just track that chunks arrived
+            if (!isCurrentSession) {
+              if (resolvedKey) {
+                set((state) => ({
+                  streamingSessions: { ...state.streamingSessions, [resolvedKey]: true },
+                  sessionHadChunks: { ...state.sessionHadChunks, [resolvedKey]: true },
+                }))
+              }
+              return
+            }
 
             set((state) => {
+              const perSession = resolvedKey ? {
+                streamingSessions: { ...state.streamingSessions, [resolvedKey]: true },
+                sessionHadChunks: { ...state.sessionHadChunks, [resolvedKey]: true },
+              } : {}
+
               const messages = [...state.messages]
               const lastMessage = messages[messages.length - 1]
 
@@ -1013,7 +1062,7 @@ export const useStore = create<AppState>()(
               if (lastMessage && lastMessage.role === 'assistant' && lastMessage.id.startsWith('streaming-')) {
                 const updatedMessage = { ...lastMessage, content: lastMessage.content + text }
                 messages[messages.length - 1] = updatedMessage
-                return { messages, isStreaming: true, hadStreamChunks: true }
+                return { messages, ...perSession }
               } else {
                 // Create new assistant placeholder
                 const newMessage: Message = {
@@ -1022,7 +1071,7 @@ export const useStore = create<AppState>()(
                   content: text,
                   timestamp: new Date().toISOString()
                 }
-                return { messages: [...messages, newMessage], isStreaming: true, hadStreamChunks: true }
+                return { messages: [...messages, newMessage], ...perSession }
               }
             })
           })
@@ -1030,33 +1079,52 @@ export const useStore = create<AppState>()(
           client.on('streamEnd', (payload: unknown) => {
             const { sessionKey } = (payload || {}) as { sessionKey?: string }
             const { currentSessionId } = get()
-            if (sessionKey && currentSessionId && sessionKey !== currentSessionId) return
+            const resolvedKey = sessionKey || get().streamingSessionId || currentSessionId
 
-            const { streamingSessionId, messages, hadStreamChunks } = get()
-
-            // If streamEnd fires while we still have a streamingSessionId, the response completed
-            if (streamingSessionId && hadStreamChunks) {
-              const lastMsg = messages[messages.length - 1]
-              if (lastMsg?.role === 'assistant') {
-                const preview = lastMsg.content.slice(0, 100)
-                const { notificationsEnabled, currentSessionId: activeSession } = get()
-                if (shouldNotify(notificationsEnabled, streamingSessionId, activeSession)) {
-                  Platform.showNotification('Agent responded', preview).catch(() => {})
+            // Notification / unread logic — works for any session, not just the viewed one
+            if (resolvedKey && get().sessionHadChunks[resolvedKey]) {
+              const { messages, notificationsEnabled, currentSessionId: activeSession } = get()
+              // Only read last message if this is the current session (messages are loaded)
+              if (resolvedKey === activeSession) {
+                const lastMsg = messages[messages.length - 1]
+                if (lastMsg?.role === 'assistant') {
+                  const preview = lastMsg.content.slice(0, 100)
+                  if (shouldNotify(notificationsEnabled, resolvedKey, activeSession)) {
+                    Platform.showNotification('Agent responded', preview).catch(() => {})
+                  }
                 }
               }
 
-              if (streamingSessionId !== currentSessionId) {
+              if (resolvedKey !== activeSession) {
                 set((state) => ({
                   unreadCounts: {
                     ...state.unreadCounts,
-                    [streamingSessionId]: (state.unreadCounts[streamingSessionId] || 0) + 1
+                    [resolvedKey]: (state.unreadCounts[resolvedKey] || 0) + 1
                   }
                 }))
+                // Also notify for non-current sessions
+                const { notificationsEnabled: ne } = get()
+                if (ne) {
+                  Platform.showNotification('Agent responded', `New message in another session`).catch(() => {})
+                }
               }
             }
 
-            set({ isStreaming: false, streamingSessionId: null, hadStreamChunks: false })
-            get().stopSubagentPolling()
+            // Clear per-session streaming state
+            if (resolvedKey) {
+              set((state) => ({
+                streamingSessions: { ...state.streamingSessions, [resolvedKey]: false },
+                sessionHadChunks: { ...state.sessionHadChunks, [resolvedKey]: false },
+                streamingSessionId: state.streamingSessionId === resolvedKey ? null : state.streamingSessionId,
+              }))
+            } else {
+              set({ streamingSessionId: null })
+            }
+
+            // Only stop subagent polling if the current session's stream ended
+            if (!sessionKey || !currentSessionId || sessionKey === currentSessionId) {
+              get().stopSubagentPolling()
+            }
           })
 
           // When the server reports the canonical session key during streaming,
@@ -1070,17 +1138,35 @@ export const useStore = create<AppState>()(
             const oldKey = streamingSessionId || currentSessionId
             if (!oldKey || sessionKey === oldKey) return
 
-            set((state) => ({
-              currentSessionId: state.currentSessionId === oldKey ? sessionKey : state.currentSessionId,
-              streamingSessionId: state.streamingSessionId === oldKey ? sessionKey : state.streamingSessionId,
-              sessions: state.sessions.map(s => {
+            set((state) => {
+              // Rename the old session to the new key and remove any existing
+              // session that already has that key to prevent duplicates.
+              let renamed = false
+              const sessions = state.sessions.reduce<typeof state.sessions>((acc, s) => {
                 const sKey = s.key || s.id
-                if (sKey === oldKey) {
-                  return { ...s, id: sessionKey, key: sessionKey }
+                if (sKey === oldKey && !renamed) {
+                  renamed = true
+                  acc.push({ ...s, id: sessionKey, key: sessionKey })
+                } else if (sKey !== sessionKey) {
+                  acc.push(s)
                 }
-                return s
-              })
-            }))
+                return acc
+              }, [])
+
+              // Migrate per-session streaming state from old key to new key
+              const { [oldKey]: wasStreaming, ...restStreaming } = state.streamingSessions
+              const { [oldKey]: hadChunks, ...restChunks } = state.sessionHadChunks
+              const { [oldKey]: toolCalls, ...restToolCalls } = state.sessionToolCalls
+
+              return {
+                currentSessionId: state.currentSessionId === oldKey ? sessionKey : state.currentSessionId,
+                streamingSessionId: state.streamingSessionId === oldKey ? sessionKey : state.streamingSessionId,
+                sessions,
+                streamingSessions: wasStreaming !== undefined ? { ...restStreaming, [sessionKey]: wasStreaming } : state.streamingSessions,
+                sessionHadChunks: hadChunks !== undefined ? { ...restChunks, [sessionKey]: hadChunks } : state.sessionHadChunks,
+                sessionToolCalls: toolCalls !== undefined ? { ...restToolCalls, [sessionKey]: toolCalls } : state.sessionToolCalls,
+              }
+            })
           })
 
           client.on('toolCall', (payload: unknown) => {
@@ -1088,16 +1174,18 @@ export const useStore = create<AppState>()(
             const { currentSessionId } = get()
             if (tc.sessionKey && currentSessionId && tc.sessionKey !== currentSessionId) return
 
+            const toolSessionKey = tc.sessionKey || currentSessionId || ''
             set((state) => {
-              const idx = state.activeToolCalls.findIndex(t => t.toolCallId === tc.toolCallId)
+              const currentToolCalls = state.sessionToolCalls[toolSessionKey] || []
+              const idx = currentToolCalls.findIndex(t => t.toolCallId === tc.toolCallId)
               if (idx >= 0) {
-                const updated = [...state.activeToolCalls]
+                const updated = [...currentToolCalls]
                 updated[idx] = {
                   ...updated[idx],
                   phase: tc.phase as 'start' | 'result',
                   result: tc.result
                 }
-                return { activeToolCalls: updated }
+                return { sessionToolCalls: { ...state.sessionToolCalls, [toolSessionKey]: updated } }
               }
 
               // New tool call: finalize the current streaming message so subsequent
@@ -1105,14 +1193,17 @@ export const useStore = create<AppState>()(
               const { messages: finalizedMsgs, finalizedId } = finalizeStreamingMessage(state.messages)
               return {
                 messages: finalizedMsgs,
-                activeToolCalls: [...state.activeToolCalls, {
-                  toolCallId: tc.toolCallId,
-                  name: tc.name,
-                  phase: tc.phase as 'start' | 'result',
-                  result: tc.result,
-                  startedAt: Date.now(),
-                  afterMessageId: finalizedId || undefined
-                }]
+                sessionToolCalls: {
+                  ...state.sessionToolCalls,
+                  [toolSessionKey]: [...currentToolCalls, {
+                    toolCallId: tc.toolCallId,
+                    name: tc.name,
+                    phase: tc.phase as 'start' | 'result',
+                    result: tc.result,
+                    startedAt: Date.now(),
+                    afterMessageId: finalizedId || undefined
+                  }]
+                }
               }
             })
           })
@@ -1184,14 +1275,14 @@ export const useStore = create<AppState>()(
         // Pre-seed the primary session filter so subagent events are dropped
         client.setPrimarySessionKey(sessionId!)
 
-        // Reset streaming state so user can always send follow-up messages
+        // Reset streaming state for this session
         // Keep activeSubagents so previous subagent blocks stay visible in chat
-        set({
-          isStreaming: false,
-          hadStreamChunks: false,
-          activeToolCalls: [],
+        set((state) => ({
+          streamingSessions: { ...state.streamingSessions, [sessionId!]: true },
+          sessionHadChunks: { ...state.sessionHadChunks, [sessionId!]: false },
+          sessionToolCalls: { ...state.sessionToolCalls, [sessionId!]: [] },
           streamingSessionId: sessionId
-        })
+        }))
 
         // Add user message immediately
         const userMessage: Message = {
@@ -1200,7 +1291,7 @@ export const useStore = create<AppState>()(
           content,
           timestamp: new Date().toISOString()
         }
-        set((state) => ({ messages: [...state.messages, userMessage], isStreaming: true }))
+        set((state) => ({ messages: [...state.messages, userMessage] }))
 
         // Send to server
         try {
@@ -1212,19 +1303,30 @@ export const useStore = create<AppState>()(
           })
         } catch {
           // If send fails, stop streaming state so UI remains usable.
-          set({ isStreaming: false, streamingSessionId: null })
+          if (sessionId) {
+            set((state) => ({
+              streamingSessions: { ...state.streamingSessions, [sessionId]: false },
+              streamingSessionId: null
+            }))
+          }
         }
       },
 
       abortChat: async () => {
-        const { client, streamingSessionId } = get()
-        if (!client || !streamingSessionId) return
+        const { client, currentSessionId } = get()
+        if (!client || !currentSessionId) return
+        if (!get().streamingSessions[currentSessionId]) return
         try {
-          await client.abortChat(streamingSessionId)
+          await client.abortChat(currentSessionId)
         } catch {
           // Abort is best-effort
         }
-        set({ isStreaming: false, streamingSessionId: null, hadStreamChunks: false, activeToolCalls: [] })
+        set((state) => ({
+          streamingSessions: { ...state.streamingSessions, [currentSessionId]: false },
+          sessionHadChunks: { ...state.sessionHadChunks, [currentSessionId]: false },
+          sessionToolCalls: { ...state.sessionToolCalls, [currentSessionId]: [] },
+          streamingSessionId: state.streamingSessionId === currentSessionId ? null : state.streamingSessionId,
+        }))
       },
 
       fetchSessions: async () => {
@@ -1252,11 +1354,13 @@ export const useStore = create<AppState>()(
           })
 
           // Preserve local-only sessions (created but no message sent yet)
-          // that aren't in the server's response.
+          // that aren't in the server's response — but never duplicate a key
+          // that already exists in the server results.
+          const allServerKeys = new Set(uniqueServerSessions.map(s => s.key || s.id))
           const keptKeys = new Set(nonSpawnedSessions.map(s => s.key || s.id))
           const localOnly = state.sessions.filter(s => {
             const key = s.key || s.id
-            return !keptKeys.has(key) && !seen.has(key) && key.startsWith('agent:')
+            return !keptKeys.has(key) && !allServerKeys.has(key) && key.startsWith('agent:')
           })
           return { sessions: [...nonSpawnedSessions, ...localOnly] }
         })
@@ -1293,12 +1397,19 @@ export const useStore = create<AppState>()(
         serverUrl: state.serverUrl,
         authMode: state.authMode,
         sidebarCollapsed: state.sidebarCollapsed,
+        collapsedSessionGroups: state.collapsedSessionGroups,
         thinkingEnabled: state.thinkingEnabled,
         notificationsEnabled: state.notificationsEnabled
       })
     }
   )
 )
+
+// Per-session selectors — derive current-session values from the per-session maps.
+const _emptyToolCalls: ToolCall[] = []
+export const selectIsStreaming = (state: AppState) => !!state.streamingSessions[state.currentSessionId || '']
+export const selectHadStreamChunks = (state: AppState) => !!state.sessionHadChunks[state.currentSessionId || '']
+export const selectActiveToolCalls = (state: AppState) => state.sessionToolCalls[state.currentSessionId || ''] || _emptyToolCalls
 
 // Vite HMR: disconnect stale WebSocket connections when modules are hot-replaced.
 // Without this, old module versions keep processing events, causing duplicate streams.

@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from 'react'
-import { useStore } from '../store'
+import { useStore, selectIsStreaming } from '../store'
 
 export function InputArea() {
   const [message, setMessage] = useState('')
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const { sendMessage, abortChat, isStreaming, connected } = useStore()
+  const { sendMessage, abortChat, connected } = useStore()
+  const isStreaming = useStore(selectIsStreaming)
 
   const maxLength = 4000
 

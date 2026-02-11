@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useMemo, Fragment, memo } from 'react'
-import { useStore, ToolCall, SubagentInfo } from '../store'
+import { useStore, selectIsStreaming, selectHadStreamChunks, selectActiveToolCalls, ToolCall, SubagentInfo } from '../store'
 import { Message, stripAnsi } from '../lib/openclaw'
 import { SubagentBlock } from './SubagentBlock'
 import { format, isSameDay } from 'date-fns'
@@ -11,7 +11,10 @@ import logoUrl from '../../build/icon.png'
 marked.setOptions({ breaks: true, gfm: true, async: false })
 
 export function ChatArea() {
-  const { messages: allMessages, isStreaming, hadStreamChunks, agents, currentAgentId, sessions, currentSessionId, activeToolCalls, activeSubagents, openSubagentPopout } = useStore()
+  const { messages: allMessages, agents, currentAgentId, sessions, currentSessionId, activeSubagents, openSubagentPopout } = useStore()
+  const isStreaming = useStore(selectIsStreaming)
+  const hadStreamChunks = useStore(selectHadStreamChunks)
+  const activeToolCalls = useStore(selectActiveToolCalls)
   const messages = useMemo(
     () => allMessages.filter((m) => m.role !== 'system'),
     [allMessages]

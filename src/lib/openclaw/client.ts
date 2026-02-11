@@ -517,7 +517,12 @@ export class OpenClawClient {
           if (phase === 'end' || phase === 'error' || state === 'complete' || state === 'error') {
             if (this.activeStreamSource === 'agent' && this.streamStarted) {
               this.emit('streamEnd', { sessionKey: eventSessionKey })
-              this.resetStreamState()
+              // Partial reset: keep activeStreamSource and assistantStreamText so
+              // late-arriving chat:delta events are still filtered by the
+              // activeStreamSource !== 'chat' guard and don't re-emit content
+              // that's already in the store's streaming placeholder.
+              // chat:final will call full resetStreamState().
+              this.streamStarted = false
             }
           }
         }

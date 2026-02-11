@@ -11,6 +11,11 @@ function extractAgentIdFromKey(key?: string): string | undefined {
   return undefined
 }
 
+// Subagent sessions use key format "agent:<agentId>:subagent:<uuid>"
+function isSubagentKey(key?: string): boolean {
+  return !!key && key.includes(':subagent:')
+}
+
 export async function listSessions(call: RpcCaller): Promise<Session[]> {
   try {
     const result = await call<any>('sessions.list', {
@@ -20,17 +25,21 @@ export async function listSessions(call: RpcCaller): Promise<Session[]> {
     })
 
     const sessions = Array.isArray(result) ? result : (result?.sessions || [])
-    return (Array.isArray(sessions) ? sessions : []).map((s: any) => ({
-      id: s.key || s.id || `session-${Math.random()}`,
-      key: s.key || s.id,
-      title: s.title || s.label || s.key || s.id || 'New Chat',
-      agentId: s.agentId || extractAgentIdFromKey(s.key || s.id),
-      createdAt: new Date(s.updatedAt || s.createdAt || Date.now()).toISOString(),
-      updatedAt: new Date(s.updatedAt || s.createdAt || Date.now()).toISOString(),
-      lastMessage: s.lastMessagePreview || s.lastMessage,
-      spawned: s.spawned ?? s.isSpawned ?? undefined,
-      parentSessionId: s.parentSessionId || s.parentKey || undefined
-    }))
+    return (Array.isArray(sessions) ? sessions : []).map((s: any) => {
+      const key = s.key || s.id
+      const spawned = (s.spawned ?? s.isSpawned ?? isSubagentKey(key)) || undefined
+      return {
+        id: key || `session-${Math.random()}`,
+        key,
+        title: s.title || s.label || key || 'New Chat',
+        agentId: s.agentId || extractAgentIdFromKey(key),
+        createdAt: new Date(s.updatedAt || s.createdAt || Date.now()).toISOString(),
+        updatedAt: new Date(s.updatedAt || s.createdAt || Date.now()).toISOString(),
+        lastMessage: s.lastMessagePreview || s.lastMessage,
+        spawned,
+        parentSessionId: s.parentSessionId || s.parentKey || s.spawnedBy || undefined
+      }
+    })
   } catch {
     return []
   }

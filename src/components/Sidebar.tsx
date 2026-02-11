@@ -1,7 +1,8 @@
-import { useState, useEffect, useRef, useMemo } from 'react'
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react'
 import { useStore } from '../store'
 import { formatDistanceToNow } from 'date-fns'
 import { Agent } from '../lib/openclaw'
+import { groupSessionsByDate } from '../utils/dateGrouping'
 import logoUrl from '../../build/icon.png'
 
 export function Sidebar() {
@@ -21,23 +22,78 @@ export function Sidebar() {
     setCurrentAgent,
     selectAgentForDetail,
     showCreateAgent,
-    unreadCounts
+    unreadCounts,
+    collapsedSessionGroups,
+    toggleSessionGroup,
+    fetchSessions
   } = useStore()
 
   const currentAgent = agents.find((a) => a.id === currentAgentId)
 
-  // Filter out spawned subagent sessions — they're shown as SubagentBlock
-  // cards in the chat area, not as sidebar entries.
-  const visibleSessions = useMemo(() =>
-    sessions.filter(s => {
+  // Refresh sessions state
+  const [refreshing, setRefreshing] = useState(false)
+  const handleRefreshSessions = async () => {
+    if (refreshing) return
+    setRefreshing(true)
+    try {
+      await fetchSessions()
+    } finally {
+      setRefreshing(false)
+    }
+  }
+
+  // Search state with debounce
+  const [searchQuery, setSearchQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>()
+
+  const handleSearchChange = useCallback((value: string) => {
+    setSearchQuery(value)
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    searchTimerRef.current = setTimeout(() => setDebouncedQuery(value), 300)
+  }, [])
+
+  useEffect(() => {
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current)
+    }
+  }, [])
+
+  // Filter out spawned subagent sessions and deduplicate by key.
+  const visibleSessions = useMemo(() => {
+    const seen = new Set<string>()
+    return sessions.filter(s => {
       const key = s.key || s.id
+      if (seen.has(key)) return false
+      seen.add(key)
       // Always keep the currently active session visible
       if (key === currentSessionId) return true
       // Hide spawned subagent sessions
       return !s.spawned && !s.parentSessionId
-    }),
-    [sessions, currentSessionId]
-  )
+    })
+  }, [sessions, currentSessionId])
+
+  // Apply search filter
+  const filteredSessions = useMemo(() => {
+    const q = debouncedQuery.toLowerCase().trim()
+    if (!q) return visibleSessions
+    return visibleSessions.filter(s =>
+      s.title.toLowerCase().includes(q) ||
+      (s.lastMessage && s.lastMessage.toLowerCase().includes(q))
+    )
+  }, [visibleSessions, debouncedQuery])
+
+  // Group filtered sessions by date
+  const sessionGroups = useMemo(() => groupSessionsByDate(filteredSessions), [filteredSessions])
+
+  // Build agent lookup for emoji badges
+  const agentMap = useMemo(() => {
+    const map = new Map<string, Agent>()
+    for (const agent of agents) {
+      map.set(agent.id, agent)
+    }
+    return map
+  }, [agents])
 
   // Context Menu State
   const [contextMenu, setContextMenu] = useState<{ x: number, y: number, sessionId: string } | null>(null)
@@ -97,59 +153,150 @@ export function Sidebar() {
         </button>
 
         <div className="sessions-section">
-          <h3 className="section-title">Sessions</h3>
-          <div className="sessions-list">
-            {visibleSessions.map((session) => (
-              <div
-                key={session.key || session.id}
-                className={`session-item ${(session.key || session.id) === currentSessionId ? 'active' : ''}`}
-                onClick={() => setCurrentSession(session.key || session.id)}
-                onContextMenu={(e) => handleContextMenu(e, session.key || session.id, session.title)}
-              >
-                <div className="session-indicator" />
-                {session.spawned && (
-                  <span className="session-spawned-badge" title="Spawned subagent session">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M6 3v12" />
-                      <path d="M18 9a3 3 0 100-6 3 3 0 000 6z" />
-                      <path d="M6 21a3 3 0 100-6 3 3 0 000 6z" />
-                      <path d="M15 6h-4a2 2 0 00-2 2v7" />
-                    </svg>
-                  </span>
-                )}
-                <div className="session-content">
-                  <div className="session-title">{session.title}</div>
-                  {session.lastMessage && (
-                    <div className="session-preview">{session.lastMessage}</div>
-                  )}
-                  <div className="session-time">
-                    {formatDistanceToNow(new Date(session.updatedAt), { addSuffix: true })}
-                  </div>
-                </div>
-                {unreadCounts[session.key || session.id] > 0 && (
-                  <span className="session-badge">{unreadCounts[session.key || session.id]}</span>
-                )}
-                {(session.key || session.id) !== 'agent:main:main' && (
-                  <button
-                    className="session-delete"
-                    onClick={(e) => {
-                      e.stopPropagation()
-                      deleteSession(session.key || session.id)
-                    }}
-                    aria-label="Delete session"
-                  >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path d="M18 6L6 18M6 6l12 12" />
-                    </svg>
-                  </button>
-                )}
-              </div>
-            ))}
+          <div className="sessions-section-header">
+            <h3 className="section-title">Sessions</h3>
+            <button
+              className={`sessions-refresh-btn ${refreshing ? 'refreshing' : ''}`}
+              onClick={handleRefreshSessions}
+              aria-label="Refresh sessions"
+              title="Refresh sessions"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path d="M21 2v6h-6" />
+                <path d="M3 12a9 9 0 0115.36-6.36L21 8" />
+                <path d="M3 22v-6h6" />
+                <path d="M21 12a9 9 0 01-15.36 6.36L3 16" />
+              </svg>
+            </button>
+          </div>
 
-            {visibleSessions.length === 0 && (
+          {/* Search input */}
+          <div className="sidebar-search">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <circle cx="11" cy="11" r="8" />
+              <path d="M21 21l-4.35-4.35" />
+            </svg>
+            <input
+              type="text"
+              placeholder="Search sessions..."
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+            />
+            {searchQuery && (
+              <button
+                className="sidebar-search-clear"
+                onClick={() => { setSearchQuery(''); setDebouncedQuery('') }}
+                aria-label="Clear search"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M18 6L6 18M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </div>
+
+          <div className="sessions-list">
+            {sessionGroups.map((group) => {
+              const isCollapsed = collapsedSessionGroups.includes(group.label)
+              return (
+                <div key={group.label} className={`session-group ${isCollapsed ? 'collapsed' : ''}`}>
+                  <div
+                    className="session-group-header"
+                    onClick={() => toggleSessionGroup(group.label)}
+                  >
+                    <svg
+                      className="session-group-chevron"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M9 18l6-6-6-6" />
+                    </svg>
+                    <span className="session-group-label">{group.label}</span>
+                    <span className="session-group-count">{group.sessions.length}</span>
+                  </div>
+                  {!isCollapsed && (
+                    <div className="session-group-items">
+                      {group.sessions.map((session) => {
+                        const sessionKey = session.key || session.id
+                        const sessionAgent = session.agentId && session.agentId !== currentAgentId
+                          ? agentMap.get(session.agentId)
+                          : undefined
+                        const isNewChat = session.title === 'New Chat'
+
+                        return (
+                          <div
+                            key={sessionKey}
+                            className={`session-item ${sessionKey === currentSessionId ? 'active' : ''}`}
+                            onClick={() => setCurrentSession(sessionKey)}
+                            onContextMenu={(e) => handleContextMenu(e, sessionKey, session.title)}
+                          >
+                            <div className="session-indicator" />
+                            {session.spawned && (
+                              <span className="session-spawned-badge" title="Spawned subagent session">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M6 3v12" />
+                                  <path d="M18 9a3 3 0 100-6 3 3 0 000 6z" />
+                                  <path d="M6 21a3 3 0 100-6 3 3 0 000 6z" />
+                                  <path d="M15 6h-4a2 2 0 00-2 2v7" />
+                                </svg>
+                              </span>
+                            )}
+                            <div className="session-content">
+                              <div className="session-title-row">
+                                {sessionAgent?.emoji && (
+                                  <span className="session-agent-badge" title={sessionAgent.name}>
+                                    {sessionAgent.emoji}
+                                  </span>
+                                )}
+                                <div className="session-title">{session.title}</div>
+                              </div>
+                              {isNewChat && session.lastMessage ? (
+                                <div className="session-subtitle">{session.lastMessage}</div>
+                              ) : session.lastMessage && (
+                                <div className="session-preview">{session.lastMessage}</div>
+                              )}
+                              <div className="session-time">
+                                {formatDistanceToNow(new Date(session.updatedAt), { addSuffix: true })}
+                              </div>
+                            </div>
+                            {unreadCounts[sessionKey] > 0 && (
+                              <span className="session-badge">{unreadCounts[sessionKey]}</span>
+                            )}
+                            {sessionKey !== 'agent:main:main' && (
+                              <button
+                                className="session-delete"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  deleteSession(sessionKey)
+                                }}
+                                aria-label="Delete session"
+                              >
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                  <path d="M18 6L6 18M6 6l12 12" />
+                                </svg>
+                              </button>
+                            )}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+
+            {filteredSessions.length === 0 && (
               <div className="empty-sessions">
-                <p>No sessions yet</p>
-                <p className="hint">Start a new chat to begin</p>
+                {debouncedQuery ? (
+                  <p>No matching sessions</p>
+                ) : (
+                  <>
+                    <p>No sessions yet</p>
+                    <p className="hint">Start a new chat to begin</p>
+                  </>
+                )}
               </div>
             )}
           </div>
@@ -180,17 +327,17 @@ export function Sidebar() {
 
       {/* Context Menu */}
       {contextMenu && (
-        <div 
+        <div
           className="context-menu"
-          style={{ 
-            position: 'fixed', 
-            top: contextMenu.y, 
+          style={{
+            position: 'fixed',
+            top: contextMenu.y,
             left: contextMenu.x,
             zIndex: 1000
           }}
         >
-          <div 
-            className="context-menu-item" 
+          <div
+            className="context-menu-item"
             onClick={() => {
               setShowRenameModal(true)
               setContextMenu(null)
@@ -220,10 +367,10 @@ export function Sidebar() {
   )
 }
 
-function RenameModal({ currentTitle, onSave, onClose }: { 
+function RenameModal({ currentTitle, onSave, onClose }: {
   currentTitle: string
-  onSave: (newLabel: string) => void 
-  onClose: () => void 
+  onSave: (newLabel: string) => void
+  onClose: () => void
 }) {
   const [label, setLabel] = useState(currentTitle)
   const inputRef = useRef<HTMLInputElement>(null)
