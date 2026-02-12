@@ -15,4 +15,5 @@ export type {
 } from './types'
 export type { CreateAgentParams, CreateAgentResult, DeleteAgentResult } from './agents'
 export { buildIdentityContent } from './agents'
+export { getServerConfig, patchServerConfig } from './config'
 export type { ClawHubSkill, ClawHubSort } from '../clawhub'

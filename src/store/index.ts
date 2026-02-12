@@ -68,7 +68,7 @@ interface AppState {
   setRightPanelTab: (tab: 'skills' | 'crons') => void
 
   // Main View State
-  mainView: 'chat' | 'skill-detail' | 'cron-detail' | 'agent-detail' | 'create-agent' | 'clawhub-skill-detail'
+  mainView: 'chat' | 'skill-detail' | 'cron-detail' | 'agent-detail' | 'create-agent' | 'clawhub-skill-detail' | 'server-settings'
   setMainView: (view: 'chat' | 'skill-detail' | 'cron-detail' | 'agent-detail' | 'create-agent' | 'clawhub-skill-detail') => void
   selectedSkill: Skill | null
   selectedCronJob: CronJob | null
@@ -76,6 +76,7 @@ interface AppState {
   selectSkill: (skill: Skill) => Promise<void>
   selectCronJob: (cronJob: CronJob) => Promise<void>
   selectAgentForDetail: (agent: Agent) => Promise<void>
+  openServerSettings: () => void
   closeDetailView: () => void
   toggleSkillEnabled: (skillId: string, enabled: boolean) => Promise<void>
   saveAgentFile: (agentId: string, fileName: string, content: string) => Promise<boolean>
@@ -297,6 +298,7 @@ export const useStore = create<AppState>()(
           }
         }
       },
+      openServerSettings: () => set({ mainView: 'server-settings', selectedSkill: null, selectedCronJob: null, selectedAgentDetail: null, selectedClawHubSkill: null }),
       closeDetailView: () => set({ mainView: 'chat', selectedSkill: null, selectedCronJob: null, selectedAgentDetail: null, selectedClawHubSkill: null }),
       toggleSkillEnabled: async (skillId, enabled) => {
         const { client } = get()

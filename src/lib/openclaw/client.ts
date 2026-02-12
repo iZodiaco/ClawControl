@@ -10,6 +10,7 @@ import * as chatApi from './chat'
 import * as agentsApi from './agents'
 import * as skillsApi from './skills'
 import * as cronApi from './cron-jobs'
+import * as configApi from './config'
 
 /** Per-session stream accumulation state. */
 interface SessionStreamState {
@@ -664,5 +665,14 @@ export class OpenClawClient {
 
   async getCronJobDetails(cronId: string): Promise<CronJob | null> {
     return cronApi.getCronJobDetails(this.call.bind(this), cronId)
+  }
+
+  // Config
+  async getServerConfig(): Promise<{ config: any; hash: string }> {
+    return configApi.getServerConfig(this.call.bind(this))
+  }
+
+  async patchServerConfig(patch: object, baseHash: string): Promise<void> {
+    return configApi.patchServerConfig(this.call.bind(this), patch, baseHash)
   }
 }

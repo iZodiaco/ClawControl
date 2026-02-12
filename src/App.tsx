@@ -12,6 +12,7 @@ import { CronJobDetailView } from './components/CronJobDetailView'
 import { AgentDetailView } from './components/AgentDetailView'
 import { CreateAgentView } from './components/CreateAgentView'
 import { ClawHubSkillDetailView } from './components/ClawHubSkillDetailView'
+import { ServerSettingsView } from './components/ServerSettingsView'
 import {
   isNativeMobile,
   setStatusBarStyle,
@@ -107,6 +108,7 @@ function App() {
         {mainView === 'agent-detail' && <AgentDetailView />}
         {mainView === 'create-agent' && <CreateAgentView />}
         {mainView === 'clawhub-skill-detail' && <ClawHubSkillDetailView />}
+        {mainView === 'server-settings' && <ServerSettingsView />}
       </main>
 
       <RightPanel />
