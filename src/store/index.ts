@@ -506,7 +506,7 @@ export const useStore = create<AppState>()(
         // Clear default session key when switching (parent set preserved for concurrent streams)
         client?.setPrimarySessionKey(null)
         const loadVersion = ++_sessionLoadVersion
-        set({ currentSessionId: sessionId, messages: [], activeSubagents: [], unreadCounts: restCounts })
+        set({ currentSessionId: sessionId, messages: [], activeSubagents: [], unreadCounts: restCounts, mainView: 'chat', selectedSkill: null, selectedCronJob: null, selectedAgentDetail: null, selectedClawHubSkill: null })
         // Load session messages. Guard against stale loads when the user
         // rapidly switches sessions — only apply if we're still on the same
         // session and no streaming messages have been inserted.

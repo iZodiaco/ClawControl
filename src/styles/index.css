@@ -204,6 +204,7 @@ a {
 .app {
   display: flex;
   height: 100vh;
+  height: 100dvh;
   width: 100vw;
   overflow: hidden;
 }
@@ -984,6 +985,14 @@ a {
   font-weight: 500;
   font-size: 1rem;
   -webkit-app-region: no-drag;
+  min-width: 0;
+  overflow: hidden;
+}
+
+.session-name span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .edit-btn {
@@ -1056,6 +1065,17 @@ a {
   color: var(--text-secondary);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+/* Brain icon: hidden on desktop, shown on mobile (where text label is hidden) */
+.thinking-icon {
+  display: none;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.thinking-toggle:has(input:checked) .thinking-icon {
+  color: var(--accent-cyan);
 }
 
 .toggle-switch {
@@ -2981,6 +3001,14 @@ a {
     display: none;
   }
 
+  .thinking-icon {
+    display: block;
+  }
+
+  .theme-toggle {
+    display: none;
+  }
+
   .connection-status .status-text {
     display: none;
   }
@@ -3768,30 +3796,38 @@ a {
 
 /* ===== Mobile App (Capacitor) ===== */
 
-/* Safe area insets for iOS notch/dynamic island and Android cutouts */
-.app {
-  padding-top: env(safe-area-inset-top);
-  padding-bottom: env(safe-area-inset-bottom);
-  padding-left: env(safe-area-inset-left);
-  padding-right: env(safe-area-inset-right);
-}
+/* Safe area insets for iOS notch/dynamic island and Android cutouts.
+   Applied to individual edge elements rather than .app to prevent layout shift. */
 
-/* On native mobile, remove Electron-specific title bar padding */
+/* On native mobile, apply safe area insets to the actual edge elements */
 body.capacitor-mobile .top-bar {
-  height: var(--top-bar-height);
-  padding-top: 0;
+  height: calc(var(--top-bar-height) + env(safe-area-inset-top));
+  padding-top: env(safe-area-inset-top);
   -webkit-app-region: unset;
 }
 
 body.capacitor-mobile .sidebar-header {
-  padding-top: var(--space-md);
-  min-height: var(--top-bar-height);
+  padding-top: calc(var(--space-md) + env(safe-area-inset-top));
+  min-height: calc(var(--top-bar-height) + env(safe-area-inset-top));
   -webkit-app-region: unset;
 }
 
 body.capacitor-mobile .panel-header {
-  padding-top: var(--space-md);
-  min-height: var(--top-bar-height);
+  padding-top: calc(var(--space-md) + env(safe-area-inset-top));
+  min-height: calc(var(--top-bar-height) + env(safe-area-inset-top));
+}
+
+body.capacitor-mobile .input-area {
+  padding-bottom: calc(var(--space-md) + env(safe-area-inset-bottom));
+}
+
+body.capacitor-mobile .sidebar {
+  padding-left: env(safe-area-inset-left);
+}
+
+body.capacitor-mobile .main-content {
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
 }
 
 /* Larger touch targets for mobile */
@@ -3842,7 +3878,7 @@ body.capacitor-mobile .input-container textarea {
   user-select: text;
 }
 
-/* Mobile keyboard handling - adjust input area when keyboard is visible */
+/* Mobile keyboard handling - remove extra bottom safe area when keyboard covers it */
 body.capacitor-mobile.keyboard-visible .input-area {
   padding-bottom: var(--space-sm);
 }
@@ -3928,9 +3964,12 @@ body.capacitor-mobile .overlay {
   display: block !important;
 }
 
-/* Pull-to-refresh prevention */
+/* Pull-to-refresh prevention and viewport stability */
 body.capacitor-mobile {
   overscroll-behavior-y: contain;
+  position: fixed;
+  width: 100%;
+  height: 100%;
 }
 
 /* Smooth scrolling on iOS */
@@ -3957,6 +3996,73 @@ body.capacitor-mobile .connection-status .status-text {
 
 body.capacitor-mobile .thinking-label {
   display: none;
+}
+
+body.capacitor-mobile .thinking-icon {
+  display: block;
+}
+
+/* Hide theme toggle on mobile - moved to Settings */
+body.capacitor-mobile .theme-toggle {
+  display: none;
+}
+
+/* Mobile top-bar: tighter spacing */
+body.capacitor-mobile .top-bar {
+  gap: var(--space-sm);
+}
+
+body.capacitor-mobile .top-bar-actions {
+  gap: var(--space-sm);
+}
+
+/* Mobile session name: allow shrink */
+body.capacitor-mobile .session-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 0.875rem;
+}
+
+/* Mobile edit button always hidden (no hover on touch) */
+body.capacitor-mobile .edit-btn {
+  display: none;
+}
+
+/* Mobile modal: fit within safe areas, scrollable */
+body.capacitor-mobile .modal {
+  max-height: calc(100vh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 32px);
+  max-height: calc(100dvh - env(safe-area-inset-top) - env(safe-area-inset-bottom) - 32px);
+  display: flex;
+  flex-direction: column;
+}
+
+body.capacitor-mobile .modal-body {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  flex: 1;
+  min-height: 0;
+}
+
+/* Mobile detail views: bottom safe area for scrollable content */
+body.capacitor-mobile .detail-content {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* Mobile modal footer: wrap buttons on small screens */
+body.capacitor-mobile .modal-footer {
+  flex-wrap: wrap;
+}
+
+body.capacitor-mobile .modal-footer .btn {
+  flex: 1;
+  min-width: 0;
+  text-align: center;
+}
+
+/* Mobile detail back button: larger touch target */
+body.capacitor-mobile .detail-back {
+  min-height: 44px;
+  min-width: 44px;
 }
 
 /* Agent profile responsive on small screens */

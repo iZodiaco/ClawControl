@@ -45,7 +45,13 @@ export function TopBar() {
       </div>
 
       <div className="top-bar-actions">
-        <div className="thinking-toggle">
+        <div className="thinking-toggle" title="Thinking mode">
+          <svg className="thinking-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" width="18" height="18">
+            <path d="M12 2C8.13 2 5 5.13 5 9c0 2.38 1.19 4.47 3 5.74V17a1 1 0 001 1h6a1 1 0 001-1v-2.26c1.81-1.27 3-3.36 3-5.74 0-3.87-3.13-7-7-7z" />
+            <path d="M9 21h6M10 19v2M14 19v2" />
+            <path d="M10 9.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5c0 .53-.28 1-.7 1.27-.26.17-.3.23-.3.73" strokeLinecap="round" />
+            <circle cx="12" cy="13" r=".5" fill="currentColor" />
+          </svg>
           <span className="thinking-label">Thinking</span>
           <label className="toggle-switch">
             <input

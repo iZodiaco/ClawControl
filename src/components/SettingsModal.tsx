@@ -17,7 +17,9 @@ export function SettingsModal() {
     connecting,
     notificationsEnabled,
     setNotificationsEnabled,
-    openServerSettings
+    openServerSettings,
+    theme,
+    toggleTheme
   } = useStore()
 
   const [url, setUrl] = useState(serverUrl)
@@ -150,6 +152,21 @@ export function SettingsModal() {
           <div className="connection-status-box">
             <span className={`status-indicator ${connected ? 'connected' : 'disconnected'}`} />
             <span>{connected ? 'Connected' : connecting ? 'Connecting...' : 'Disconnected'}</span>
+          </div>
+
+          <div className="form-group" style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', marginTop: '16px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span>Appearance</span>
+              <label className="toggle-switch" style={{ marginLeft: '8px' }}>
+                <input
+                  type="checkbox"
+                  checked={theme === 'dark'}
+                  onChange={() => toggleTheme()}
+                />
+                <span className="toggle-slider"></span>
+              </label>
+            </label>
+            <span className="form-hint">{theme === 'dark' ? 'Dark mode' : 'Light mode'}</span>
           </div>
 
           <div className="form-group" style={{ borderTop: '1px solid var(--border)', paddingTop: '16px', marginTop: '16px' }}>
