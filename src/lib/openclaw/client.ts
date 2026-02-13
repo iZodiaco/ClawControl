@@ -192,6 +192,7 @@ export class OpenClawClient {
         minProtocol: 3,
         maxProtocol: 3,
         role: 'operator',
+        scopes: ['operator.read', 'operator.write', 'operator.admin'],
         client: {
           id: 'gateway-client',
           displayName: 'ClawControl',

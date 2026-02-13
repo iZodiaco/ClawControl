@@ -34,6 +34,7 @@
     "@capacitor/preferences": "^8.0.0",
     "@capacitor/splash-screen": "^8.0.0",
     "@capacitor/status-bar": "^8.0.0",
+    "capacitor-native-websocket": "file:plugins/capacitor-native-websocket",
     "date-fns": "^3.3.1",
     "marked": "^17.0.1",
     "react": "^18.2.0",
@@ -41,7 +42,6 @@
     "react-markdown": "^10.1.0",
     "rehype-sanitize": "^6.0.0",
     "remark-gfm": "^4.0.1",
-    "capacitor-native-websocket": "file:plugins/capacitor-native-websocket",
     "zustand": "^4.5.0"
   },
   "devDependencies": {
