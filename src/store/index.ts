@@ -701,7 +701,29 @@ export const useStore = create<AppState>()(
       // Agents
       agents: [],
       currentAgentId: null,
-      setCurrentAgent: (agentId) => set({ currentAgentId: agentId }),
+      setCurrentAgent: (agentId) => {
+        const { currentAgentId: prevAgentId, sessions, currentSessionId } = get()
+        if (agentId === prevAgentId) return
+
+        // Find the most recent non-subagent, non-cron session for the new agent
+        const agentSession = sessions.find(s => {
+          const key = s.key || s.id
+          return s.agentId === agentId && !s.spawned && !s.cron && !key.includes(':subagent:') && !key.includes(':cron:')
+        })
+
+        const newSessionId = agentSession ? (agentSession.key || agentSession.id) : null
+        set({ currentAgentId: agentId, currentSessionId: newSessionId, messages: [] })
+
+        // Load messages for the existing session, if any
+        if (newSessionId) {
+          const { client } = get()
+          client?.getSessionMessages(newSessionId).then((loadedMessages) => {
+            if (get().currentSessionId === newSessionId) {
+              set({ messages: loadedMessages })
+            }
+          }).catch(() => {})
+        }
+      },
       showCreateAgent: () => set({ mainView: 'create-agent', selectedSkill: null, selectedCronJob: null, selectedAgentDetail: null }),
       createAgent: async (params) => {
         const { client } = get()

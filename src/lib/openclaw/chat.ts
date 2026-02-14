@@ -144,7 +144,11 @@ export async function sendMessage(call: RpcCaller, params: {
     idempotencyKey
   }
 
-  payload.sessionKey = params.sessionId || 'agent:main:main'
+  payload.sessionKey = params.sessionId || (params.agentId ? `agent:${params.agentId}:main` : 'agent:main:main')
+
+  if (params.agentId) {
+    payload.agentId = params.agentId
+  }
 
   if (params.thinking) {
     payload.thinking = 'normal'
