@@ -7,6 +7,7 @@
   "license": "MIT",
   "scripts": {
     "dev": "npx vite",
+    "postinstall": "npx tsc -p plugins/capacitor-native-websocket/tsconfig.json",
     "build": "npx vite build && npx electron-builder",
     "build:win": "npx vite build && npx electron-builder --win",
     "build:mac": "npx vite build && npx electron-builder --mac",

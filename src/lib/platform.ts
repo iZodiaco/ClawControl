@@ -9,6 +9,10 @@ import { Keyboard } from '@capacitor/keyboard'
 import { App } from '@capacitor/app'
 import { LocalNotifications } from '@capacitor/local-notifications'
 
+// NOTE: iOS WKWebView doesn't provide CommonJS `require`, so this must be an ESM import.
+// We still gate usage to iOS in createWebSocketFactory().
+import { NativeWebSocketWrapper } from './native-websocket'
+
 export type PlatformType = 'electron' | 'ios' | 'android' | 'web'
 
 export function getPlatform(): PlatformType {
@@ -115,10 +119,8 @@ export function createWebSocketFactory(tlsOptions?: TLSFactoryOptions): ((url: s
   const platform = getPlatform()
   if (platform !== 'ios') return undefined
 
-  // Lazy-import to avoid pulling in the native plugin on non-iOS platforms
+  // Gate usage to iOS (other platforms fall back to browser WebSocket).
   return (url: string) => {
-    // Dynamic require — the NativeWebSocketWrapper is only loaded on iOS
-    const { NativeWebSocketWrapper } = require('./native-websocket')
     return new NativeWebSocketWrapper(url, tlsOptions)
   }
 }
