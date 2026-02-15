@@ -180,6 +180,10 @@ let _baselineSessionKeys: Set<string> | null = null
 // Monotonic counter for detecting stale async message loads after session switches.
 let _sessionLoadVersion = 0
 
+// Per-session message cache so switching back to a session shows messages instantly
+// while the async refresh loads fresh data from the server.
+const _sessionMessagesCache = new Map<string, Message[]>()
+
 // Cache of ClawHub skill stats from list results (slug -> { downloads, stars })
 const _clawHubStatsCache = new Map<string, { downloads: number; stars: number }>()
 
@@ -682,24 +686,40 @@ export const useStore = create<AppState>()(
       sessions: [],
       currentSessionId: null,
       setCurrentSession: (sessionId) => {
-        const { unreadCounts, client } = get()
+        const { unreadCounts, client, currentSessionId: prevSessionId, messages: currentMessages, sessions } = get()
         const { [sessionId]: _, ...restCounts } = unreadCounts
         // Clear default session key when switching (parent set preserved for concurrent streams)
         client?.setPrimarySessionKey(null)
+
+        // Cache outgoing session's messages (excluding streaming placeholders)
+        if (prevSessionId && currentMessages.length > 0) {
+          const nonStreaming = currentMessages.filter(m => !m.id.startsWith('streaming-'))
+          if (nonStreaming.length > 0) {
+            _sessionMessagesCache.set(prevSessionId, nonStreaming)
+          }
+        }
+
         const loadVersion = ++_sessionLoadVersion
-        set({ currentSessionId: sessionId, messages: [], activeSubagents: [], unreadCounts: restCounts, mainView: 'chat', selectedSkill: null, selectedCronJob: null, selectedAgentDetail: null, selectedClawHubSkill: null })
-        // Load session messages. Guard against stale loads when the user
-        // rapidly switches sessions — only apply if we're still on the same
-        // session and no streaming messages have been inserted.
+        const cachedMessages = _sessionMessagesCache.get(sessionId) || []
+
+        // Auto-switch agent to match the session's owner
+        const session = sessions.find(s => (s.key || s.id) === sessionId)
+        const agentUpdate = session?.agentId && session.agentId !== get().currentAgentId
+          ? { currentAgentId: session.agentId } : {}
+
+        set({ currentSessionId: sessionId, messages: cachedMessages, activeSubagents: [], unreadCounts: restCounts, mainView: 'chat', selectedSkill: null, selectedCronJob: null, selectedAgentDetail: null, selectedClawHubSkill: null, ...agentUpdate })
+        // Load fresh messages from server. Guard against stale loads when the
+        // user rapidly switches sessions.
         client?.getSessionMessages(sessionId).then((loadedMessages) => {
           if (_sessionLoadVersion !== loadVersion) return
+          _sessionMessagesCache.set(sessionId, loadedMessages)
           set((state) => {
             if (state.currentSessionId !== sessionId) return state
             // Preserve any streaming placeholder that arrived during the async load
             const streamingMsgs = state.messages.filter(m => m.id.startsWith('streaming-'))
             return { messages: streamingMsgs.length > 0 ? [...loadedMessages, ...streamingMsgs] : loadedMessages }
           })
-        })
+        }).catch(() => {})
       },
       createNewSession: async () => {
         const { client, currentAgentId } = get()
@@ -717,6 +737,7 @@ export const useStore = create<AppState>()(
       },
       deleteSession: (sessionId) => {
         if (SYSTEM_SESSION_RE.test(sessionId)) return
+        _sessionMessagesCache.delete(sessionId)
         const { client } = get()
         client?.deleteSession(sessionId)
         set((state) => {
@@ -766,8 +787,16 @@ export const useStore = create<AppState>()(
       agents: [],
       currentAgentId: null,
       setCurrentAgent: (agentId) => {
-        const { currentAgentId: prevAgentId, sessions } = get()
+        const { currentAgentId: prevAgentId, sessions, currentSessionId: prevSessionId, messages: currentMessages } = get()
         if (agentId === prevAgentId) return
+
+        // Cache outgoing session's messages
+        if (prevSessionId && currentMessages.length > 0) {
+          const nonStreaming = currentMessages.filter(m => !m.id.startsWith('streaming-'))
+          if (nonStreaming.length > 0) {
+            _sessionMessagesCache.set(prevSessionId, nonStreaming)
+          }
+        }
 
         // Find the most recent non-subagent, non-cron session for the new agent
         const agentSession = sessions.find(s => {
@@ -776,13 +805,15 @@ export const useStore = create<AppState>()(
         })
 
         const newSessionId = agentSession ? (agentSession.key || agentSession.id) : null
-        set({ currentAgentId: agentId, currentSessionId: newSessionId, messages: [] })
+        const cachedMessages = newSessionId ? (_sessionMessagesCache.get(newSessionId) || []) : []
+        set({ currentAgentId: agentId, currentSessionId: newSessionId, messages: cachedMessages })
 
-        // Load messages for the existing session, if any
+        // Load fresh messages for the existing session, if any
         if (newSessionId) {
           const { client } = get()
           client?.getSessionMessages(newSessionId).then((loadedMessages) => {
             if (get().currentSessionId === newSessionId) {
+              _sessionMessagesCache.set(newSessionId, loadedMessages)
               set({ messages: loadedMessages })
             }
           }).catch(() => {})
