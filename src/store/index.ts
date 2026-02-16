@@ -604,8 +604,17 @@ export const useStore = create<AppState>()(
               const key = s.key || s.id
               if (_baselineSessionKeys?.has(key)) continue
 
+              // Skip internal system sessions — they are not subagents
+              if (SYSTEM_SESSION_RE.test(key)) {
+                console.log('[subagent-poll] skipping system session:', key)
+                continue
+              }
+
               // Only show subagents that belong to the current session
-              if (!s.spawned && s.parentSessionId !== currentSessionId) continue
+              if (!s.spawned && s.parentSessionId !== currentSessionId) {
+                console.log('[subagent-poll] skipping non-matching session:', key, { spawned: s.spawned, parentSessionId: s.parentSessionId, currentSessionId })
+                continue
+              }
               const parentId = s.parentSessionId || currentSessionId || undefined
 
               // Skip if already tracked
@@ -1555,6 +1564,7 @@ export const useStore = create<AppState>()(
           client.on('subagentDetected', (payload: unknown) => {
             const { sessionKey } = payload as { sessionKey: string }
             if (!sessionKey) return
+            console.log('[store] subagentDetected event:', sessionKey)
 
             set((state) => {
               // Skip if already tracked

@@ -15,6 +15,9 @@ import * as skillsApi from './skills'
 import * as cronApi from './cron-jobs'
 import * as configApi from './config'
 
+/** Matches internal system sessions that should never be treated as subagents. */
+const SYSTEM_SESSION_RE = /^agent:[^:]+:(main|cron)(:|$)/
+
 /** Per-session stream accumulation state. */
 interface SessionStreamState {
   source: 'chat' | 'agent' | null
@@ -572,8 +575,15 @@ export class OpenClawClient {
 
     // Subagent detection: events from sessions not in the parent set
     // indicate a spawned subagent conversation.
+    // Skip system sessions (agent:X:main, agent:X:cron) — they are internal
+    // and should never surface as subagent blocks in the chat.
     if (this.parentSessionKeys.size > 0 && eventSessionKey && !this.parentSessionKeys.has(eventSessionKey)) {
-      this.emit('subagentDetected', { sessionKey: eventSessionKey })
+      if (SYSTEM_SESSION_RE.test(eventSessionKey)) {
+        console.log('[subagent] skipping system session:', eventSessionKey)
+      } else {
+        console.log('[subagent] detected:', eventSessionKey, 'parentKeys:', [...this.parentSessionKeys])
+        this.emit('subagentDetected', { sessionKey: eventSessionKey })
+      }
     }
 
     switch (event) {

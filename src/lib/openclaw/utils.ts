@@ -94,15 +94,33 @@ export function isCronTriggerContent(text: string): boolean {
 
 /**
  * Strip server-injected metadata prefix from user messages loaded via chat.history.
- * The server prepends a block like:
- *   Conversation info (untrusted metadata):\n\n\n{...json...}\n[timestamp] hash\n\n
- * before the actual user content.
+ *
+ * The server wraps inbound user messages with two layers:
+ * 1. Context blocks — "Conversation info (untrusted metadata):", "Sender (untrusted metadata):",
+ *    "Thread starter (untrusted, for context):", etc.  Each block contains a ```json fenced
+ *    code block and is separated by blank lines.
+ * 2. An envelope line — "[channel user timestamp] <actual message>"
+ *
+ * We strip all context blocks and the envelope bracket prefix, preserving the user's message.
  */
 export function stripConversationMetadata(text: string): string {
-  // Match: "Conversation info (untrusted metadata):" followed by a JSON block
-  // and a bracketed timestamp+hash line, then strip everything up to and including it.
-  const re = /^Conversation info \(untrusted metadata\):[\s\S]*?\n\[[^\]]+\]\s+[0-9a-f]+\n+/
-  return text.replace(re, '')
+  // Step 1: Strip all "...(untrusted...):" blocks with their fenced JSON.
+  // Each block looks like:  Label (untrusted ...):\n```json\n{...}\n```
+  let stripped = text.replace(
+    /^(?:[^\n]*\(untrusted[^)]*\):[\s\S]*?```\s*\n*)+/,
+    ''
+  ).trimStart()
+
+  // Step 2: Strip the envelope bracket prefix [channel user timestamp]
+  // The user's actual message follows the closing "]".
+  if (stripped.startsWith('[')) {
+    const bracketEnd = stripped.indexOf(']')
+    if (bracketEnd !== -1) {
+      stripped = stripped.slice(bracketEnd + 1).trimStart()
+    }
+  }
+
+  return stripped || text
 }
 
 export function resolveSessionKey(raw: any): string | null {

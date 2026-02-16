@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import { useStore } from '../store'
 
 export function TopBar() {
@@ -9,13 +10,35 @@ export function TopBar() {
     thinkingEnabled,
     setThinkingEnabled,
     sessions,
+    agents,
     currentSessionId,
     connected,
     setShowSettings
   } = useStore()
 
   const currentSession = sessions.find((s) => (s.key || s.id) === currentSessionId)
-  const sessionName = currentSession?.title || 'New Chat'
+
+  // Resolve a friendly display name, matching the Sidebar logic:
+  // 1. If the session has a custom title (not "New Chat" and not the raw key), use it.
+  // 2. Otherwise parse agent:name:id from the key and look up the agent's display name.
+  const sessionName = useMemo(() => {
+    if (!currentSession) return 'New Chat'
+    const key = currentSession.key || currentSession.id || ''
+    const title = currentSession.title || ''
+    const isNewChat = title === 'New Chat'
+    const hasCustomTitle = !isNewChat && title && title !== key
+    if (hasCustomTitle) return title
+
+    const keyParts = key.match(/^agent:([^:]+):(.+)$/)
+    if (keyParts) {
+      const agentSlug = keyParts[1]
+      const agent = agents.find(a => a.id === currentSession.agentId)
+        || agents.find(a => a.id === agentSlug)
+      if (agent?.name) return agent.name
+      return agentSlug.charAt(0).toUpperCase() + agentSlug.slice(1)
+    }
+    return title || 'New Chat'
+  }, [currentSession, agents])
 
   return (
     <header className="top-bar">
