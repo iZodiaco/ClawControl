@@ -95,6 +95,32 @@ final class WebSocketManager: NSObject, URLSessionDelegate, URLSessionWebSocketD
         onClose?(closeCode.rawValue, reasonText)
     }
 
+    // MARK: - URLSessionTaskDelegate (connection-level errors)
+
+    func urlSession(
+        _ session: URLSession,
+        task: URLSessionTask,
+        didCompleteWithError error: Error?
+    ) {
+        guard let error else { return }
+        let nsError = error as NSError
+        let message: String
+        // Detect TLS/certificate errors specifically
+        if nsError.domain == NSURLErrorDomain &&
+           (nsError.code == NSURLErrorServerCertificateUntrusted ||
+            nsError.code == NSURLErrorServerCertificateHasBadDate ||
+            nsError.code == NSURLErrorServerCertificateHasUnknownRoot ||
+            nsError.code == NSURLErrorServerCertificateNotYetValid ||
+            nsError.code == NSURLErrorClientCertificateRejected ||
+            nsError.code == NSURLErrorSecureConnectionFailed) {
+            message = "TLS_CERTIFICATE_ERROR: \(error.localizedDescription)"
+        } else {
+            message = error.localizedDescription
+        }
+        onError?(message)
+        onClose?(1006, message)
+    }
+
     // MARK: - URLSessionDelegate (TLS)
 
     func urlSession(

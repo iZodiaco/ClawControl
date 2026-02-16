@@ -1608,6 +1608,12 @@ export const useStore = create<AppState>()(
             return
           }
 
+          // Don't rethrow cert errors — the CertErrorModal handles them
+          if (errMsg.startsWith('Certificate error')) {
+            set({ connecting: false, connected: false })
+            return
+          }
+
           // If we used a stored device token and it failed, retry with the gateway token
           if (serverHost && effectiveToken !== gatewayToken) {
             console.warn('[ClawControl] Device token failed, retrying with gateway token')

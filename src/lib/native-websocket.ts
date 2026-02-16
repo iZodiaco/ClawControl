@@ -60,8 +60,11 @@ export class NativeWebSocketWrapper {
       this.listeners.push(closeHandle)
 
       const errorHandle = await NativeWebSocket.addListener('error', (event: any) => {
-        console.error('[NativeWS] error', event.message)
-        this.onerror?.({ type: 'error', message: event.message })
+        const msg = event.message || ''
+        console.error('[NativeWS] error', msg)
+        // Tag TLS errors from the native side so the client can detect them
+        const isTLS = typeof msg === 'string' && msg.startsWith('TLS_CERTIFICATE_ERROR:')
+        this.onerror?.({ type: 'error', message: msg, isTLSError: isTLS })
       })
       this.listeners.push(errorHandle)
 

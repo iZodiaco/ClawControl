@@ -116,9 +116,18 @@ export class OpenClawClient {
           this.reconnectAttempts = 0
         }
 
-        this.ws.onerror = (error) => {
-          // Check if this might be a certificate error (wss:// that failed to connect)
-          if (this.url.startsWith('wss://') && this.ws?.readyState === this.ws?.CLOSED) {
+        this.ws.onerror = (error: any) => {
+          const errorMsg = error?.message || ''
+
+          // Check for TLS certificate errors:
+          // 1. Native iOS WebSocket tags TLS errors with 'TLS_CERTIFICATE_ERROR:' prefix
+          // 2. For browser WebSocket, we can only guess based on wss:// + immediate close
+          const isTLSError = error?.isTLSError === true
+          const isBrowserCertGuess = !this.wsFactory &&
+            this.url.startsWith('wss://') &&
+            this.ws?.readyState === WebSocket.CLOSED
+
+          if (isTLSError || isBrowserCertGuess) {
             try {
               const urlObj = new URL(this.url)
               const httpsUrl = `https://${urlObj.host}`
@@ -130,8 +139,9 @@ export class OpenClawClient {
             }
           }
 
+          const detail = errorMsg ? `: ${errorMsg}` : ''
           this.emit('error', error)
-          settle(reject, new Error('WebSocket connection failed'))
+          settle(reject, new Error(`WebSocket connection failed${detail}`))
         }
 
         this.ws.onclose = () => {
