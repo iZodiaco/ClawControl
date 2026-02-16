@@ -34,6 +34,9 @@ export class NativeWebSocketWrapper {
     this.init(url, tlsOptions)
   }
 
+  /** Browser WebSocket used as fallback when native plugin isn't available. */
+  private fallbackWs: WebSocket | null = null
+
   private async init(url: string, tlsOptions?: TLSOptions): Promise<void> {
     try {
       console.log('[NativeWS] init', url)
@@ -71,15 +74,47 @@ export class NativeWebSocketWrapper {
       await NativeWebSocket.connect({ url, tls: tlsOptions })
       console.log('[NativeWS] connect call resolved (native)')
     } catch (err) {
+      const msg = String(err)
+      // If the native plugin isn't registered, fall back to browser WebSocket
+      if (msg.includes('not implemented')) {
+        console.warn('[NativeWS] native plugin unavailable, falling back to browser WebSocket')
+        this.cleanup()
+        this.initBrowserFallback(url)
+        return
+      }
       console.error('[NativeWS] init failed', err)
       this.readyState = NativeWebSocketWrapper.CLOSED
-      this.onerror?.({ type: 'error', message: String(err) })
+      this.onerror?.({ type: 'error', message: msg })
+    }
+  }
+
+  private initBrowserFallback(url: string): void {
+    const ws = new WebSocket(url)
+    this.fallbackWs = ws
+
+    ws.onopen = (ev) => {
+      this.readyState = NativeWebSocketWrapper.OPEN
+      this.onopen?.(ev)
+    }
+    ws.onmessage = (ev) => {
+      this.onmessage?.(ev)
+    }
+    ws.onclose = (ev) => {
+      this.readyState = NativeWebSocketWrapper.CLOSED
+      this.onclose?.(ev)
+    }
+    ws.onerror = (ev) => {
+      this.onerror?.(ev)
     }
   }
 
   send(data: string): void {
     if (this.readyState !== NativeWebSocketWrapper.OPEN) {
       throw new Error('WebSocket is not open')
+    }
+    if (this.fallbackWs) {
+      this.fallbackWs.send(data)
+      return
     }
     NativeWebSocket.send({ data }).catch((err: unknown) => {
       this.onerror?.({ type: 'error', message: String(err) })
@@ -92,6 +127,10 @@ export class NativeWebSocketWrapper {
       return
     }
     this.readyState = NativeWebSocketWrapper.CLOSING
+    if (this.fallbackWs) {
+      this.fallbackWs.close()
+      return
+    }
     NativeWebSocket.disconnect().catch(() => {}).finally(() => {
       this.readyState = NativeWebSocketWrapper.CLOSED
       this.cleanup()
