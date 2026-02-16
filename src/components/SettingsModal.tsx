@@ -308,7 +308,7 @@ export function SettingsModal() {
           <button className="btn btn-secondary" onClick={() => setShowSettings(false)}>
             {connected ? 'Close' : 'Cancel'}
           </button>
-          {(!connected || connectionExpanded) && (
+          {!connected && (
             <button className="btn btn-primary" onClick={handleSave} disabled={connecting}>
               {connecting ? 'Connecting...' : 'Save & Connect'}
             </button>
