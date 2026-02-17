@@ -37,6 +37,9 @@ export function SettingsModal() {
   const [showToken, setShowToken] = useState(false)
   const [connectionExpanded, setConnectionExpanded] = useState(!connected)
   const [connectPhase, setConnectPhase] = useState<'idle' | 'connecting' | 'retrying' | 'failed'>('idle')
+  const [autoRetryCount, setAutoRetryCount] = useState(0)
+  const [autoRetryTimer, setAutoRetryTimer] = useState<ReturnType<typeof setInterval> | null>(null)
+  const [nextRetryIn, setNextRetryIn] = useState(0)
 
   useEffect(() => {
     setUrl(serverUrl)
@@ -51,6 +54,23 @@ export function SettingsModal() {
     if (connected || showSettings) setConnectPhase('idle')
   }, [connected, showSettings])
 
+  // Stop auto-retry when connected or modal closes
+  useEffect(() => {
+    if (connected && autoRetryTimer) {
+      clearInterval(autoRetryTimer)
+      setAutoRetryTimer(null)
+      setAutoRetryCount(0)
+      setNextRetryIn(0)
+    }
+  }, [connected, autoRetryTimer])
+
+  // Cleanup timer on unmount
+  useEffect(() => {
+    return () => {
+      if (autoRetryTimer) clearInterval(autoRetryTimer)
+    }
+  }, [autoRetryTimer])
+
   const validateUrl = (value: string) => {
     try {
       const parsed = new URL(value)
@@ -61,6 +81,83 @@ export function SettingsModal() {
     } catch {
       return 'Invalid URL format'
     }
+  }
+
+  const startAutoRetry = () => {
+    // Stop any existing timer
+    if (autoRetryTimer) {
+      clearInterval(autoRetryTimer)
+    }
+
+    let count = 0
+    let secondsLeft = 60
+    setAutoRetryCount(0)
+    setNextRetryIn(60)
+
+    const timer = setInterval(async () => {
+      secondsLeft--
+      setNextRetryIn(secondsLeft)
+
+      if (secondsLeft <= 0) {
+        count++
+        setAutoRetryCount(count)
+
+        if (count >= 5) {
+          // Stop after 5 auto-retries (5 minutes)
+          clearInterval(timer)
+          setAutoRetryTimer(null)
+          setNextRetryIn(0)
+          setConnectPhase('idle')
+          return
+        }
+
+        // Attempt reconnect
+        setConnectPhase('retrying')
+        try {
+          await retryConnect()
+          // Check if we actually connected (pairing may have silently failed)
+          const state = useStore.getState()
+          if (state.connected) {
+            clearInterval(timer)
+            setAutoRetryTimer(null)
+            setAutoRetryCount(0)
+            setNextRetryIn(0)
+            setConnectPhase('idle')
+            setShowSettings(false)
+            return
+          }
+        } catch {
+          // Retry failed
+        }
+        setConnectPhase('idle')
+        secondsLeft = 60
+        setNextRetryIn(60)
+      }
+    }, 1000)
+
+    setAutoRetryTimer(timer)
+  }
+
+  const handleManualRetry = async () => {
+    setConnectPhase('retrying')
+    try {
+      await retryConnect()
+      const state = useStore.getState()
+      if (state.connected) {
+        if (autoRetryTimer) {
+          clearInterval(autoRetryTimer)
+          setAutoRetryTimer(null)
+        }
+        setAutoRetryCount(0)
+        setNextRetryIn(0)
+        setConnectPhase('idle')
+        setShowSettings(false)
+        return
+      }
+    } catch {
+      // Retry failed
+    }
+    setConnectPhase('idle')
   }
 
   const handleSave = async () => {
@@ -93,29 +190,43 @@ export function SettingsModal() {
       // URL parsing failed or storage error — proceed anyway
     }
 
-    // Try to connect with auto-retry
+    // Try to connect
     setConnectPhase('connecting')
     try {
       await connect()
+      // Check if pairing is required — connect() doesn't throw for NOT_PAIRED
+      const state = useStore.getState()
+      if (state.pairingStatus === 'pending') {
+        setConnectPhase('idle')
+        startAutoRetry()
+        return  // Keep modal open
+      }
       setConnectPhase('idle')
       setShowSettings(false)
       return
     } catch {
-      // First attempt failed — retry silently
+      // First attempt failed — retry once
     }
 
     setConnectPhase('retrying')
     try {
       await connect()
+      const state = useStore.getState()
+      if (state.pairingStatus === 'pending') {
+        setConnectPhase('idle')
+        startAutoRetry()
+        return  // Keep modal open
+      }
       setConnectPhase('idle')
       setShowSettings(false)
       return
     } catch {
-      // Retry also failed — flash "Failed..." briefly
+      // Retry also failed
     }
 
-    setConnectPhase('failed')
-    setTimeout(() => setConnectPhase('idle'), 1000)
+    // Start auto-retry cycle
+    setConnectPhase('idle')
+    startAutoRetry()
   }
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -349,14 +460,24 @@ export function SettingsModal() {
                     )}
                   </div>
                 </div>
-                <div style={{ display: 'flex', justifyContent: 'center', marginTop: '16px' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', marginTop: '16px' }}>
                   <button
                     className="btn btn-primary"
-                    onClick={retryConnect}
-                    disabled={connecting}
+                    onClick={handleManualRetry}
+                    disabled={connecting || connectPhase === 'retrying'}
                   >
-                    {connecting ? 'Connecting...' : 'Retry Connection'}
+                    {connecting || connectPhase === 'retrying' ? 'Connecting...' : 'Retry Connection'}
                   </button>
+                  {autoRetryTimer && nextRetryIn > 0 && (
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      Auto-retry in {nextRetryIn}s{autoRetryCount > 0 ? ` (attempt ${autoRetryCount}/5)` : ''}
+                    </span>
+                  )}
+                  {!autoRetryTimer && autoRetryCount >= 5 && (
+                    <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+                      Auto-retry expired. Click to retry manually.
+                    </span>
+                  )}
                 </div>
               </div>
             )
@@ -419,12 +540,19 @@ export function SettingsModal() {
             {connected ? 'Close' : 'Cancel'}
           </button>
           {!connected && (
-            <button className="btn btn-primary" onClick={handleSave} disabled={connectPhase !== 'idle'}>
-              {connectPhase === 'connecting' ? 'Connecting...'
-                : connectPhase === 'retrying' ? 'Retrying...'
-                : connectPhase === 'failed' ? 'Failed...'
-                : 'Save & Connect'}
-            </button>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
+              <button className="btn btn-primary" onClick={handleSave} disabled={connectPhase !== 'idle'}>
+                {connectPhase === 'connecting' ? 'Connecting...'
+                  : connectPhase === 'retrying' ? 'Retrying...'
+                  : connectPhase === 'failed' ? 'Failed...'
+                  : 'Save & Connect'}
+              </button>
+              {pairingStatus !== 'pending' && autoRetryTimer && nextRetryIn > 0 && (
+                <span style={{ fontSize: '11px', color: 'var(--text-secondary)' }}>
+                  Auto-retry in {nextRetryIn}s{autoRetryCount > 0 ? ` (${autoRetryCount}/5)` : ''}
+                </span>
+              )}
+            </div>
           )}
         </div>
       </div>
