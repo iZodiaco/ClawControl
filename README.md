@@ -2,7 +2,7 @@
 
 A cross-platform desktop and mobile client for OpenClaw AI assistant. Built with Electron, React, and TypeScript.
 
-> **Latest Release: [v1.1.0](https://github.com/jakeledwards/ClawControl/releases/tag/v1.1.0)** — Download the [installer](https://github.com/jakeledwards/ClawControl/releases/download/v1.1.0/ClawControl.Setup.1.1.0.exe) or [portable exe](https://github.com/jakeledwards/ClawControl/releases/download/v1.1.0/ClawControl.1.1.0.exe) for Windows.
+> **Latest Release: [v1.2.0](https://github.com/jakeledwards/ClawControl/releases/tag/v1.2.0)** — Download the [installer](https://github.com/jakeledwards/ClawControl/releases/download/v1.2.0/ClawControl.Setup.1.2.0.exe) or [portable exe](https://github.com/jakeledwards/ClawControl/releases/download/v1.2.0/ClawControl.1.2.0.exe) for Windows.
 
 ## Features
 
@@ -67,10 +67,10 @@ A cross-platform desktop and mobile client for OpenClaw AI assistant. Built with
 
 Pre-built Windows binaries are available on the [Releases](https://github.com/jakeledwards/ClawControl/releases) page:
 
-- **ClawControl Setup 1.1.0.exe** — Windows installer
-- **ClawControl 1.1.0.exe** — Portable executable (no installation required)
+- **ClawControl Setup 1.2.0.exe** — Windows installer
+- **ClawControl 1.2.0.exe** — Portable executable (no installation required)
 
-### What's New in v1.1.0
+### What's New in v1.2.0
 
 - Stop button to abort in-progress chat streams
 - Copy button on code blocks
@@ -81,7 +81,7 @@ Pre-built Windows binaries are available on the [Releases](https://github.com/ja
 - Capacitor mobile support (iOS and Android)
 - Numerous streaming and session fixes
 
-See the full [release notes](https://github.com/jakeledwards/ClawControl/releases/tag/v1.1.0) for details.
+See the full [release notes](https://github.com/jakeledwards/ClawControl/releases/tag/v1.2.0) for details.
 
 ## Installation (from source)
 
