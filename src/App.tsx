@@ -23,6 +23,7 @@ import {
   setupBackButton,
   setupAppVisibilityTracking
 } from './lib/platform'
+import { SplashScreen } from '@capacitor/splash-screen'
 
 function App() {
   const { theme, initializeApp, sidebarOpen, rightPanelOpen, mainView } = useStore()
@@ -49,6 +50,9 @@ function App() {
   // Mobile platform initialization
   useEffect(() => {
     if (!isNativeMobile()) return
+
+    // Hide splash screen now that the app has rendered
+    SplashScreen.hide()
 
     // Add mobile body class for CSS targeting
     document.body.classList.add('capacitor-mobile')
