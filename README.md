@@ -10,15 +10,19 @@ A cross-platform desktop and mobile client for OpenClaw AI assistant. Built with
 - **Chat Interface**: Clean, modern chat UI with streaming support, markdown rendering, and code block copy buttons
 - **Thinking Mode**: Toggle extended thinking for complex tasks with visible reasoning display
 - **Agent Selection**: Switch between different AI agents with per-session agent identity
-- **Agent Management**: Create, delete, and browse agent profiles, configuration, and workspace files
-- **Sessions Management**: Create, view, and manage chat sessions with unread message indicators
+- **Agent Management**: Create, rename, delete, and browse agent profiles, configuration, and workspace files
+- **Agent Dashboard**: Live activity grid showing all agents with real-time status
+- **Sessions Management**: Create, view, and manage chat sessions with message caching and unread indicators
 - **Subagent Spawning**: Spawn isolated subagent sessions for parallel task execution, with inline status blocks and popout windows
 - **ClawHub Skill Browser**: Search and browse available skills with VirusTotal security scan badges, download stats, and one-click install
-- **Tool Call Visibility**: See tool calls inline during chat as the agent works
+- **Rich Tool Call Cards**: See tool calls inline during chat with per-tool icons, detail text, and popout viewer
 - **Stop Button**: Abort in-progress chat streams at any time
 - **Server Settings**: Full-page editor for OpenClaw server configuration — agent defaults, tools & memory, and channel settings with dirty tracking and conflict detection
+- **Device Pairing**: Ed25519 device identity with pairing code display, copy/share buttons, and auto-recovery from stale identity
 - **Cron Jobs**: View and manage scheduled tasks with live status updates
 - **Dark/Light Theme**: Full theme support with system preference detection
+- **Mobile Gestures**: Swipe-to-delete sessions and long-press context menus on mobile
+- **Auto-Retry Connection**: Automatic reconnection with WebSocket health checks for half-open connection detection
 - **Cross-Platform**: Windows, macOS, iOS, and Android support via Electron and Capacitor
 
 ## Screenshots
@@ -72,14 +76,37 @@ Pre-built Windows binaries are available on the [Releases](https://github.com/ja
 
 ### What's New in v1.2.0
 
-- Stop button to abort in-progress chat streams
-- Copy button on code blocks
-- Subagent inline status blocks and popout windows
-- ClawHub skill browser with VirusTotal security scan badges
-- Agent create and delete support
-- Tool call visibility in chat
-- Capacitor mobile support (iOS and Android)
-- Numerous streaming and session fixes
+**Major Features**
+- Full-page server settings editor — configure agent defaults, tools & memory, and channels with dirty tracking and hash-based conflict detection
+- Agent dashboard with live activity grid view
+- Rich tool call cards in chat with per-tool icons, detail text, history support, and popout viewer
+- Per-session stream isolation for true concurrent multi-agent conversations
+- Ed25519 device identity with pairing code display, copy/share, and auto-recovery from stale identity
+- Agent rename support
+- Session message caching and auto-switch agent on session click
+
+**Mobile**
+- Native Capacitor WebSocket plugin for iOS TLS certificate handling
+- Swipe-to-delete sessions and long-press context menus
+- Compact mobile-optimized layouts and iOS viewport stability fixes
+- Mobile splash screen support with programmatic hide
+
+**Connection & Reliability**
+- Auto-retry connection with configurable behavior
+- WebSocket health checks to detect half-open connections
+- Auto-reconnect on send failure with error display
+- Fix for WebSocket reconnect dying silently after 5 retries
+- Insecure auth toggle for development servers
+- Collapsible connection settings that auto-collapse when connected
+
+**Fixes**
+- Fix agent switching not routing messages to the selected agent
+- Fix operator scope handshake for OpenClaw 2026.2.12
+- Fix false cert error detection on iOS WebSocket failures
+- Handle chat error events and fix stale stream state
+- Hide subagent and nested system sessions from sidebar
+- Fix settings modal overflow on desktop
+- Improved subagent filtering, TopBar session names, and metadata stripping
 
 See the full [release notes](https://github.com/jakeledwards/ClawControl/releases/tag/v1.2.0) for details.
 
@@ -226,10 +253,22 @@ clawcontrol/
 │   │   ├── TopBar.tsx
 │   │   ├── SettingsModal.tsx
 │   │   ├── CertErrorModal.tsx
-│   │   ├── SkillDetailView.tsx
-│   │   ├── CronJobDetailView.tsx
+│   │   ├── AgentDashboard.tsx       # Live agent activity grid
 │   │   ├── AgentDetailView.tsx
-│   │   └── ServerSettingsView.tsx
+│   │   ├── CreateAgentView.tsx      # Agent creation form
+│   │   ├── SkillDetailView.tsx
+│   │   ├── ClawHubSkillDetailView.tsx  # ClawHub browser detail
+│   │   ├── CronJobDetailView.tsx
+│   │   ├── ServerSettingsView.tsx
+│   │   ├── SubagentBlock.tsx        # Inline subagent status
+│   │   ├── SubagentViewer.tsx       # Popout subagent window
+│   │   ├── ToolCallViewer.tsx       # Tool call detail popout
+│   │   ├── ToolIcon.tsx             # Per-tool icon mapping
+│   │   ├── MobileGestureLayer.tsx   # Mobile swipe/long-press
+│   │   └── SessionContextMenu.tsx   # Session right-click menu
+│   ├── hooks/
+│   │   ├── useSwipeGesture.ts  # Touch swipe gesture hook
+│   │   └── useLongPress.ts     # Long-press gesture hook
 │   ├── lib/
 │   │   ├── openclaw/            # Modular WebSocket client
 │   │   │   ├── client.ts        # Core connection, event routing, per-session stream state
@@ -243,7 +282,10 @@ clawcontrol/
 │   │   │   ├── utils.ts         # ANSI stripping, content extraction, helpers
 │   │   │   └── index.ts         # Public re-exports
 │   │   ├── openclaw-client.test.ts  # Integration tests (Vitest)
-│   │   └── platform.ts         # Platform abstraction (Electron/Capacitor/web)
+│   │   ├── platform.ts         # Platform abstraction (Electron/Capacitor/web)
+│   │   ├── device-identity.ts  # Ed25519 device identity and pairing
+│   │   ├── native-websocket.ts # Native Capacitor WebSocket bridge
+│   │   └── clawhub.ts          # ClawHub skill browser API
 │   ├── store/
 │   │   └── index.ts       # Zustand state management
 │   ├── styles/
