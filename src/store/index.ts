@@ -1296,11 +1296,54 @@ export const useStore = create<AppState>()(
               // Replace streaming placeholder with the final server message
               const lastIdx = state.messages.length - 1
               const lastMsg = lastIdx >= 0 ? state.messages[lastIdx] : null
+
+              // Helper: re-anchor tool calls from an old message id to the new final id
+              const reanchorToolCalls = (oldId: string, sessionToolCalls: typeof state.sessionToolCalls) => {
+                const tcKey = resolvedKey || ''
+                const tcs = sessionToolCalls[tcKey]
+                if (!tcs?.some(tc => tc.afterMessageId === oldId)) return sessionToolCalls
+                return {
+                  ...sessionToolCalls,
+                  [tcKey]: tcs.map(tc =>
+                    tc.afterMessageId === oldId ? { ...tc, afterMessageId: message.id } : tc
+                  )
+                }
+              }
+
               if (lastMsg && lastMsg.role === 'assistant' && lastMsg.id.startsWith('streaming-')) {
                 replacedStreaming = true
                 const updated = [...state.messages]
                 updated[lastIdx] = { ...message }
-                return { messages: updated, streamingSessions }
+                return {
+                  messages: updated,
+                  streamingSessions,
+                  sessionToolCalls: reanchorToolCalls(lastMsg.id, state.sessionToolCalls)
+                }
+              }
+
+              // Also check for finalized messages (msg-finalized-*) that may hold tool calls
+              const finalizedIdx = state.messages.findIndex(m =>
+                m.role === 'assistant' && m.id.startsWith('msg-finalized-')
+              )
+              if (finalizedIdx >= 0) {
+                const finalizedMsg = state.messages[finalizedIdx]
+                const updated = [...state.messages]
+                // If the finalized message has no content, remove it (tool-call-only anchor)
+                // and re-anchor its tool calls to the new final message
+                if (!finalizedMsg.content.trim()) {
+                  updated.splice(finalizedIdx, 1)
+                } else {
+                  // Keep it but give it the canonical id if it's the same content
+                  updated[finalizedIdx] = { ...finalizedMsg }
+                }
+                const exists = updated.some(m => m.id === message.id)
+                return {
+                  messages: exists
+                    ? updated.map(m => m.id === message.id ? message : m)
+                    : [...updated, message],
+                  streamingSessions,
+                  sessionToolCalls: reanchorToolCalls(finalizedMsg.id, state.sessionToolCalls)
+                }
               }
 
               const exists = state.messages.some(m => m.id === message.id)
@@ -1426,7 +1469,20 @@ export const useStore = create<AppState>()(
                   content: text,
                   timestamp: new Date().toISOString()
                 }
-                return { messages: [...messages, newMessage], ...perSession }
+
+                // Re-anchor any orphaned (trailing) tool calls to this new message
+                // so they render above the text inside the same bubble.
+                const tcKey = resolvedKey || ''
+                const currentTCs = state.sessionToolCalls[tcKey]
+                let sessionToolCalls = state.sessionToolCalls
+                if (currentTCs?.some(tc => !tc.afterMessageId)) {
+                  const updated = currentTCs.map(tc =>
+                    tc.afterMessageId ? tc : { ...tc, afterMessageId: newMessage.id }
+                  )
+                  sessionToolCalls = { ...state.sessionToolCalls, [tcKey]: updated }
+                }
+
+                return { messages: [...messages, newMessage], sessionToolCalls, ...perSession }
               }
             })
           })

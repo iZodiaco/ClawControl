@@ -228,6 +228,36 @@ export async function getSessionMessages(call: RpcCaller, sessionId: string): Pr
       }) as (Message | null)[]
 
       const filteredMessages = rawMessages.filter((m): m is Message => m !== null)
+
+      // Merge consecutive empty assistant messages so their tool calls group
+      // into a single bubble instead of creating separate empty bubbles.
+      for (let i = filteredMessages.length - 1; i > 0; i--) {
+        const curr = filteredMessages[i]
+        const prev = filteredMessages[i - 1]
+        if (
+          curr.role === 'assistant' && prev.role === 'assistant' &&
+          !curr.content.trim()
+        ) {
+          // Re-anchor tool calls from this empty message to the previous assistant
+          for (const tc of toolCalls) {
+            if (tc.afterMessageId === curr.id) {
+              tc.afterMessageId = prev.id
+            }
+          }
+          filteredMessages.splice(i, 1)
+        }
+      }
+
+      // Anchor orphaned tool calls (no afterMessageId) to the nearest assistant
+      // message so they render inside a bubble instead of trailing at the bottom.
+      for (const tc of toolCalls) {
+        if (!tc.afterMessageId) {
+          // Find the last assistant message as fallback anchor
+          const lastAssistant = filteredMessages.filter(m => m.role === 'assistant').pop()
+          if (lastAssistant) tc.afterMessageId = lastAssistant.id
+        }
+      }
+
       console.log('[chat.history] Returning', filteredMessages.length, 'messages,', toolCalls.length, 'tool calls')
       if (toolCalls.length > 0) {
         console.log('[chat.history] Tool calls:', toolCalls.map(tc => `${tc.name}(${tc.phase}) after:${tc.afterMessageId}`))

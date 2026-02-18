@@ -110,12 +110,18 @@ export function ChatArea() {
           return (
             <Fragment key={message.id}>
               {isNewDay && <DateSeparator date={new Date(message.timestamp)} />}
+              {msgToolCalls && msgToolCalls.length > 0 && openToolCallPopout && (
+                <ToolCallBubble
+                  toolCalls={msgToolCalls}
+                  agentAvatar={currentAgent?.avatar}
+                  agentName={currentAgent?.name}
+                  onOpenPopout={openToolCallPopout}
+                />
+              )}
               <MessageBubble
                 message={message}
                 agentName={currentAgent?.name}
                 agentAvatar={currentAgent?.avatar}
-                toolCalls={msgToolCalls}
-                onOpenToolPopout={openToolCallPopout}
               />
               {msgSubagents && (
                 <div className="subagents-container">
@@ -129,25 +135,13 @@ export function ChatArea() {
         })}
 
         {/* Trailing tool calls and subagents (no afterMessageId) */}
-        {toolCallsByMessageId.has('__trailing__') && (
-          <div className="message agent">
-            <div className="message-avatar">
-              {currentAgent?.avatar ? (
-                <img src={currentAgent.avatar} alt={currentAgent?.name || 'Agent'} />
-              ) : (
-                <svg viewBox="0 0 24 24" fill="currentColor">
-                  <path d="M12 2a2 2 0 012 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 017 7h1a1 1 0 011 1v3a1 1 0 01-1 1h-1v1a2 2 0 01-2 2H5a2 2 0 01-2-2v-1H2a1 1 0 01-1-1v-3a1 1 0 011-1h1a7 7 0 017-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 012-2zm-4 12a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm8 0a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" />
-                </svg>
-              )}
-            </div>
-            <div className="message-content">
-              <div className="message-bubble">
-                {toolCallsByMessageId.get('__trailing__')!.map((tc) => (
-                  <ToolCallBlock key={tc.toolCallId} toolCall={tc} onOpenPopout={openToolCallPopout} />
-                ))}
-              </div>
-            </div>
-          </div>
+        {toolCallsByMessageId.has('__trailing__') && openToolCallPopout && (
+          <ToolCallBubble
+            toolCalls={toolCallsByMessageId.get('__trailing__')!}
+            agentAvatar={currentAgent?.avatar}
+            agentName={currentAgent?.name}
+            onOpenPopout={openToolCallPopout}
+          />
         )}
         {subagentsByMessageId.has('__trailing__') && (
           <div className="subagents-container">
@@ -199,14 +193,10 @@ const MessageBubble = memo(function MessageBubble({
   message,
   agentName,
   agentAvatar,
-  toolCalls,
-  onOpenToolPopout
 }: {
   message: Message
   agentName?: string
   agentAvatar?: string
-  toolCalls?: ToolCall[]
-  onOpenToolPopout?: (id: string) => void
 }) {
   const isUser = message.role === 'user'
   const time = format(new Date(message.timestamp), 'h:mm a')
@@ -253,11 +243,6 @@ const MessageBubble = memo(function MessageBubble({
             </div>
           )}
           <MessageContent content={message.content} />
-          {toolCalls && toolCalls.length > 0 && onOpenToolPopout && (
-            toolCalls.map((tc) => (
-              <ToolCallBlock key={tc.toolCallId} toolCall={tc} onOpenPopout={onOpenToolPopout} />
-            ))
-          )}
         </div>
       </div>
 
@@ -269,6 +254,35 @@ const MessageBubble = memo(function MessageBubble({
     </div>
   )
 })
+
+/** Renders a group of tool calls in their own agent-style bubble */
+function ToolCallBubble({ toolCalls, agentAvatar, agentName, onOpenPopout }: {
+  toolCalls: ToolCall[]
+  agentAvatar?: string
+  agentName?: string
+  onOpenPopout: (id: string) => void
+}) {
+  return (
+    <div className="message agent tool-call-bubble">
+      <div className="message-avatar">
+        {agentAvatar ? (
+          <img src={agentAvatar} alt={agentName || 'Agent'} />
+        ) : (
+          <svg viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 2a2 2 0 012 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 017 7h1a1 1 0 011 1v3a1 1 0 01-1 1h-1v1a2 2 0 01-2 2H5a2 2 0 01-2-2v-1H2a1 1 0 01-1-1v-3a1 1 0 011-1h1a7 7 0 017-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 012-2zm-4 12a1.5 1.5 0 100 3 1.5 1.5 0 000-3zm8 0a1.5 1.5 0 100 3 1.5 1.5 0 000-3z" />
+          </svg>
+        )}
+      </div>
+      <div className="message-content">
+        <div className="message-bubble">
+          {toolCalls.map((tc) => (
+            <ToolCallBlock key={tc.toolCallId} toolCall={tc} onOpenPopout={onOpenPopout} />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
 
 const TOOL_INLINE_THRESHOLD = 80
 const TOOL_PREVIEW_MAX = 100
