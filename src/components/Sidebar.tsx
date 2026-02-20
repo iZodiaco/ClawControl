@@ -161,7 +161,13 @@ export function Sidebar() {
           </button>
         </div>
 
-        <button className="new-chat-btn" onClick={createNewSession}>
+        <button className="new-chat-btn" onClick={() => {
+          createNewSession();
+          setTimeout(() => {
+            const input = document.querySelector('.input-area textarea') as HTMLTextAreaElement;
+            if (input) input.focus();
+          }, 50);
+        }}>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M12 5v14M5 12h14" />
           </svg>
@@ -180,6 +186,18 @@ export function Sidebar() {
           </svg>
           <span>Dashboard</span>
         </button>
+
+        <button
+          className={`dashboard-link-btn ${mainView === 'usage' ? 'active' : ''}`}
+          onClick={() => useStore.getState().openUsage()}
+          style={{ marginTop: '0px' }}
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+          </svg>
+          <span>Server Usage</span>
+        </button>
+
 
         <div className="sessions-section">
           <div className="sessions-section-header">
@@ -394,10 +412,10 @@ function SessionItem({
   const hasCustomTitle = !isNewChat && session.title !== sessionKey
   const resolvedAgentName = keyParts && !hasCustomTitle
     ? (
-        (session.agentId && agentMap.get(session.agentId)?.name) ||
-        (agentMap.get(keyParts[1])?.name) ||
-        keyParts[1].charAt(0).toUpperCase() + keyParts[1].slice(1)
-      )
+      (session.agentId && agentMap.get(session.agentId)?.name) ||
+      (agentMap.get(keyParts[1])?.name) ||
+      keyParts[1].charAt(0).toUpperCase() + keyParts[1].slice(1)
+    )
     : null
   const parsedSessionId = keyParts && !hasCustomTitle
     ? keyParts[2]

@@ -17,9 +17,10 @@ A cross-platform desktop and mobile client for OpenClaw AI assistant. Built with
 - **ClawHub Skill Browser**: Search and browse available skills with VirusTotal security scan badges, download stats, and one-click install
 - **Rich Tool Call Cards**: See tool calls inline during chat with per-tool icons, detail text, and popout viewer
 - **Stop Button**: Abort in-progress chat streams at any time
-- **Server Settings**: Full-page editor for OpenClaw server configuration — agent defaults, tools & memory, and channel settings with dirty tracking and conflict detection
+- **Server Settings**: Full-page editor for OpenClaw server configuration — agent defaults, tools & memory, features (TTS & VoiceWake) and channel settings with dirty tracking and conflict detection
+- **Usage View**: Monitor the server limits, resources, and usage cost estimates
 - **Device Pairing**: Ed25519 device identity with pairing code display, copy/share buttons, and auto-recovery from stale identity
-- **Cron Jobs**: View and manage scheduled tasks with live status updates
+- **Cron Jobs**: View, create, manually run, delete, and manage scheduled tasks with live status updates
 - **Dark/Light Theme**: Full theme support with system preference detection
 - **Mobile Gestures**: Swipe-to-delete sessions and long-press context menus on mobile
 - **Auto-Retry Connection**: Automatic reconnection with WebSocket health checks for half-open connection detection

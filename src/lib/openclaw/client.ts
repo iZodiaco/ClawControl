@@ -14,6 +14,7 @@ import * as agentsApi from './agents'
 import * as skillsApi from './skills'
 import * as cronApi from './cron-jobs'
 import * as configApi from './config'
+import * as featuresApi from './features'
 
 /** Matches internal system sessions that should never be treated as subagents. */
 const SYSTEM_SESSION_RE = /^agent:[^:]+:(main|cron)(:|$)/
@@ -45,8 +46,7 @@ export class OpenClawClient {
   }>()
   private eventHandlers = new Map<string, Set<EventHandler>>()
   private reconnectAttempts = 0
-  private maxReconnectAttempts = 5
-  private reconnectDelay = 1000
+  private maxReconnectAttempts = 10
   private authenticated = false
   private deviceIdentity: DeviceIdentity | null = null
   private healthCheckTimer: ReturnType<typeof setInterval> | null = null
@@ -137,7 +137,8 @@ export class OpenClawClient {
             this.ws?.readyState === WebSocket.CLOSED
 
           if (isTLSError || isBrowserCertGuess) {
-            this.suppressReconnect = true
+            // We'll let the standard `attemptReconnect` logic retry this connection 
+            // instead of instantly showing the unrecoverable error modal.
             try {
               const urlObj = new URL(this.url)
               const httpsUrl = `https://${urlObj.host}`
@@ -146,7 +147,9 @@ export class OpenClawClient {
                 this.certErrorEmitted = true
                 this.emit('certError', { url: this.url, httpsUrl })
               }
-              settle(reject, new Error(`Certificate error - visit ${httpsUrl} to accept the certificate`))
+              // Because Tailscale occasionally drops the TLS handshake under high VPN load,
+              // we do NOT reject the promise immediately. This allows the socket `onclose`
+              // event to trigger a natural `attemptReconnect()` loop using the fallback params.
               return
             } catch {
               // URL parsing failed, fall through to generic error
@@ -178,7 +181,7 @@ export class OpenClawClient {
           if (incoming instanceof Blob) {
             incoming.text().then((text) => {
               this.handleMessage(text, (...a) => settle(resolve, ...a), (...a) => settle(reject, ...a))
-            }).catch(() => {})
+            }).catch(() => { })
             return
           }
 
@@ -213,10 +216,10 @@ export class OpenClawClient {
     }
 
     this.reconnectAttempts++
-    const delay = Math.min(this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1), 30000)
+    const delay = 1000
 
     setTimeout(() => {
-      this.connect().catch(() => {})
+      this.connect().catch(() => { })
     }, delay)
   }
 
@@ -316,8 +319,8 @@ export class OpenClawClient {
         },
         caps: ['tool-events'],
         auth: this.token
-            ? (this.authMode === 'password' ? { password: this.token } : { token: this.token })
-            : undefined,
+          ? (this.authMode === 'password' ? { password: this.token } : { token: this.token })
+          : undefined,
         device
       }
     }
@@ -416,7 +419,7 @@ export class OpenClawClient {
           // Stale device identity — keypair changed but server has old key.
           // Signal the store to clear the identity and retry.
           if (errorMsg.toLowerCase().includes('signature invalid') ||
-              errorMsg.toLowerCase().includes('signature mismatch')) {
+            errorMsg.toLowerCase().includes('signature mismatch')) {
             this.emit('deviceIdentityStale')
             reject?.(new Error('DEVICE_IDENTITY_STALE'))
             return
@@ -853,4 +856,30 @@ export class OpenClawClient {
   async patchServerConfig(patch: object, baseHash: string): Promise<void> {
     return configApi.patchServerConfig(this.call.bind(this), patch, baseHash)
   }
+
+  // Cron Jobs (Extended)
+  async addCronJob(params: any): Promise<void> {
+    return cronApi.addCronJob(this.call.bind(this), params)
+  }
+  async updateCronJob(id: string, params: any): Promise<void> {
+    return cronApi.updateCronJob(this.call.bind(this), id, params)
+  }
+  async removeCronJob(id: string): Promise<void> {
+    return cronApi.removeCronJob(this.call.bind(this), id)
+  }
+  async runCronJob(id: string): Promise<void> {
+    return cronApi.runCronJob(this.call.bind(this), id)
+  }
+
+  // Features
+  async getUsageStatus(): Promise<any> { return featuresApi.getUsageStatus(this.call.bind(this)) }
+  async getUsageCost(): Promise<any> { return featuresApi.getUsageCost(this.call.bind(this)) }
+
+  async getTtsStatus(): Promise<any> { return featuresApi.getTtsStatus(this.call.bind(this)) }
+  async getTtsProviders(): Promise<any> { return featuresApi.getTtsProviders(this.call.bind(this)) }
+  async setTtsEnable(enable: boolean): Promise<any> { return featuresApi.setTtsEnable(this.call.bind(this), enable) }
+  async setTtsProvider(provider: string): Promise<any> { return featuresApi.setTtsProvider(this.call.bind(this), provider) }
+
+  async getVoicewake(): Promise<any> { return featuresApi.getVoicewake(this.call.bind(this)) }
+  async setVoicewake(params: any): Promise<any> { return featuresApi.setVoicewake(this.call.bind(this), params) }
 }

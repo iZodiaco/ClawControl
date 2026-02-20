@@ -64,3 +64,19 @@ export async function getCronJobDetails(call: RpcCaller, cronId: string): Promis
     return null
   }
 }
+
+export async function addCronJob(call: RpcCaller, params: any): Promise<void> {
+  await call('cron.add', params)
+}
+
+export async function updateCronJob(call: RpcCaller, cronId: string, params: any): Promise<void> {
+  await call('cron.update', { id: cronId, ...params })
+}
+
+export async function removeCronJob(call: RpcCaller, cronId: string): Promise<void> {
+  await call('cron.remove', { id: cronId })
+}
+
+export async function runCronJob(call: RpcCaller, cronId: string): Promise<void> {
+  await call('cron.run', { id: cronId })
+}

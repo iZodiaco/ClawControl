@@ -85,8 +85,8 @@ interface AppState {
   setRightPanelTab: (tab: 'skills' | 'crons') => void
 
   // Main View State
-  mainView: 'chat' | 'skill-detail' | 'cron-detail' | 'agent-detail' | 'create-agent' | 'clawhub-skill-detail' | 'server-settings' | 'pixel-dashboard'
-  setMainView: (view: 'chat' | 'skill-detail' | 'cron-detail' | 'agent-detail' | 'create-agent' | 'clawhub-skill-detail') => void
+  mainView: 'chat' | 'skill-detail' | 'cron-detail' | 'create-cron' | 'agent-detail' | 'create-agent' | 'clawhub-skill-detail' | 'server-settings' | 'usage' | 'pixel-dashboard'
+  setMainView: (view: 'chat' | 'skill-detail' | 'cron-detail' | 'create-cron' | 'agent-detail' | 'create-agent' | 'clawhub-skill-detail' | 'usage') => void
   selectedSkill: Skill | null
   selectedCronJob: CronJob | null
   selectedAgentDetail: AgentDetail | null
@@ -94,6 +94,8 @@ interface AppState {
   selectCronJob: (cronJob: CronJob) => Promise<void>
   selectAgentForDetail: (agent: Agent) => Promise<void>
   openServerSettings: () => void
+  openUsage: () => void
+  openCreateCron: () => void
   openDashboard: () => void
   closeDetailView: () => void
   toggleSkillEnabled: (skillId: string, enabled: boolean) => Promise<void>
@@ -256,7 +258,7 @@ export const useStore = create<AppState>()(
       gatewayToken: '',
       setGatewayToken: (token) => {
         set({ gatewayToken: token })
-        Platform.saveToken(token).catch(() => {})
+        Platform.saveToken(token).catch(() => { })
       },
       insecureAuth: false,
       setInsecureAuth: (insecure) => set({ insecureAuth: insecure }),
@@ -385,6 +387,8 @@ export const useStore = create<AppState>()(
         }
       },
       openServerSettings: () => set({ mainView: 'server-settings', selectedSkill: null, selectedCronJob: null, selectedAgentDetail: null, selectedClawHubSkill: null }),
+      openUsage: () => set({ mainView: 'usage', selectedSkill: null, selectedCronJob: null, selectedAgentDetail: null, selectedClawHubSkill: null }),
+      openCreateCron: () => set({ mainView: 'create-cron', selectedSkill: null, selectedCronJob: null, selectedAgentDetail: null, selectedClawHubSkill: null }),
       openDashboard: () => set({ mainView: 'pixel-dashboard', selectedSkill: null, selectedCronJob: null, selectedAgentDetail: null, selectedClawHubSkill: null }),
       closeDetailView: () => set({ mainView: 'chat', selectedSkill: null, selectedCronJob: null, selectedAgentDetail: null, selectedClawHubSkill: null }),
       toggleSkillEnabled: async (skillId, enabled) => {
@@ -734,7 +738,7 @@ export const useStore = create<AppState>()(
               sessionToolCalls: mergedToolCalls
             }
           })
-        }).catch(() => {})
+        }).catch(() => { })
       },
       createNewSession: async () => {
         const { client, currentAgentId } = get()
@@ -842,7 +846,7 @@ export const useStore = create<AppState>()(
                   : state.sessionToolCalls
               }))
             }
-          }).catch(() => {})
+          }).catch(() => { })
         }
       },
       showCreateAgent: () => set({ mainView: 'create-agent', selectedSkill: null, selectedCronJob: null, selectedAgentDetail: null }),
@@ -1153,7 +1157,7 @@ export const useStore = create<AppState>()(
           // migrate it to secure storage
           const legacyToken = get().gatewayToken
           if (legacyToken) {
-            await Platform.saveToken(legacyToken).catch(() => {})
+            await Platform.saveToken(legacyToken).catch(() => { })
           }
         }
 
@@ -1365,7 +1369,7 @@ export const useStore = create<AppState>()(
               const { notificationsEnabled, streamingSessionId: msgSession, currentSessionId: activeSession, agents, currentAgentId } = get()
               if (shouldNotify(notificationsEnabled, msgSession, activeSession)) {
                 const name = resolveAgentName(msgSession, agents, currentAgentId)
-                Platform.showNotification(`${name} responded`, preview).catch(() => {})
+                Platform.showNotification(`${name} responded`, preview).catch(() => { })
               }
             }
           })
@@ -1378,7 +1382,7 @@ export const useStore = create<AppState>()(
               const helloOk = payload as Record<string, any>
               const deviceToken = helloOk.auth?.deviceToken
               if (typeof deviceToken === 'string' && deviceToken) {
-                saveDeviceToken(serverHost, deviceToken).catch(() => {})
+                saveDeviceToken(serverHost, deviceToken).catch(() => { })
               }
             }
           })
@@ -1394,7 +1398,7 @@ export const useStore = create<AppState>()(
           })
 
           client.on('deviceIdentityStale', () => {
-            clearDeviceIdentity().catch(() => {})
+            clearDeviceIdentity().catch(() => { })
           })
 
           client.on('disconnected', () => {
@@ -1502,7 +1506,7 @@ export const useStore = create<AppState>()(
                 if (lastMsg?.role === 'assistant') {
                   const preview = lastMsg.content.slice(0, 100)
                   if (shouldNotify(notificationsEnabled, resolvedKey, activeSession)) {
-                    Platform.showNotification(`${agentName} responded`, preview).catch(() => {})
+                    Platform.showNotification(`${agentName} responded`, preview).catch(() => { })
                   }
                 }
               }
@@ -1517,7 +1521,7 @@ export const useStore = create<AppState>()(
                 // Also notify for non-current sessions
                 const { notificationsEnabled: ne } = get()
                 if (ne) {
-                  Platform.showNotification(`${agentName} responded`, `New message in another session`).catch(() => {})
+                  Platform.showNotification(`${agentName} responded`, `New message in another session`).catch(() => { })
                 }
               }
             }
@@ -1658,11 +1662,11 @@ export const useStore = create<AppState>()(
           client.on('execApprovalRequested', (payload: unknown) => {
             const data = (payload as any)?.data || payload
             const command = data?.command || data?.tool || 'Unknown command'
-            Platform.showNotification('Exec Approval Required', String(command)).catch(() => {})
+            Platform.showNotification('Exec Approval Required', String(command)).catch(() => { })
           })
 
           await client.connect()
-          ;(globalThis as any).__clawdeskClient = client
+            ; (globalThis as any).__clawdeskClient = client
           set({ client })
 
           // Fetch initial data
@@ -1685,7 +1689,7 @@ export const useStore = create<AppState>()(
             const retries = (get() as any)._staleIdentityRetries || 0
             if (retries >= 1) {
               console.warn('[connect] Stale device identity retry exhausted, giving up')
-              ;(set as any)({ connecting: false, connected: false, _staleIdentityRetries: 0 })
+                ; (set as any)({ connecting: false, connected: false, _staleIdentityRetries: 0 })
               return
             }
             (set as any)({ _staleIdentityRetries: retries + 1 })
@@ -1786,7 +1790,7 @@ export const useStore = create<AppState>()(
 
           // Only reconnect for connection errors, not auth/scope failures
           if (!isAuthOrScope) {
-            get().connect().catch(() => {})
+            get().connect().catch(() => { })
           }
         }
       },
@@ -1872,7 +1876,7 @@ export const useStore = create<AppState>()(
       }
     }),
     {
-  name: 'clawcontrol-storage',
+      name: 'clawcontrol-storage',
       partialize: (state) => ({
         theme: state.theme,
         serverUrl: state.serverUrl,

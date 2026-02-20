@@ -13,6 +13,23 @@ export function CronJobDetailView() {
     await fetchCronJobs()
   }
 
+  const handleRun = async () => {
+    if (!client) return
+    try {
+      await client.runCronJob(selectedCronJob.id)
+    } catch (e) {
+      console.error(e)
+    }
+  }
+
+  const handleDelete = async () => {
+    if (!client) return
+    if (!window.confirm('Are you sure you want to delete this cron job?')) return
+    await client.removeCronJob(selectedCronJob.id)
+    await fetchCronJobs()
+    closeDetailView()
+  }
+
   const isActive = selectedCronJob.status === 'active'
 
   return (
@@ -38,7 +55,20 @@ export function CronJobDetailView() {
             )}
           </div>
         </div>
-        <div className="detail-actions">
+        <div className="detail-actions" style={{ gap: '8px' }}>
+          <button className="settings-button secondary" onClick={handleRun} title="Run Now">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+              <polygon points="5 3 19 12 5 21 5 3" />
+            </svg>
+            Run
+          </button>
+          <button className="settings-button secondary" style={{ color: 'var(--base-08)' }} onClick={handleDelete} title="Delete Job">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+              <path d="M18 6L6 18M6 6l12 12" />
+            </svg>
+            Delete
+          </button>
+
           <div className={`status-badge ${isActive ? 'enabled' : 'disabled'}`}>
             {isActive ? 'Active' : 'Paused'}
           </div>

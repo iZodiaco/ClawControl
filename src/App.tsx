@@ -9,10 +9,12 @@ import { SettingsModal } from './components/SettingsModal'
 import { CertErrorModal } from './components/CertErrorModal'
 import { SkillDetailView } from './components/SkillDetailView'
 import { CronJobDetailView } from './components/CronJobDetailView'
+import { CreateCronJobView } from './components/CreateCronJobView'
 import { AgentDetailView } from './components/AgentDetailView'
 import { CreateAgentView } from './components/CreateAgentView'
 import { ClawHubSkillDetailView } from './components/ClawHubSkillDetailView'
 import { ServerSettingsView } from './components/ServerSettingsView'
+import { UsageView } from './components/UsageView'
 import { AgentDashboard } from './components/AgentDashboard'
 import { MobileGestureLayer } from './components/MobileGestureLayer'
 import {
@@ -114,10 +116,12 @@ function App() {
         )}
         {mainView === 'skill-detail' && <SkillDetailView />}
         {mainView === 'cron-detail' && <CronJobDetailView />}
+        {mainView === 'create-cron' && <CreateCronJobView />}
         {mainView === 'agent-detail' && <AgentDetailView />}
         {mainView === 'create-agent' && <CreateAgentView />}
         {mainView === 'clawhub-skill-detail' && <ClawHubSkillDetailView />}
         {mainView === 'server-settings' && <ServerSettingsView />}
+        {mainView === 'usage' && <UsageView />}
         {mainView === 'pixel-dashboard' && <AgentDashboard />}
       </main>
 

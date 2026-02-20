@@ -182,6 +182,18 @@ export function RightPanel() {
         </>
       ) : (
         <div className="panel-content">
+          <div className="cron-header-actions" style={{ marginBottom: '16px', display: 'flex', justifyContent: 'flex-end', padding: '0 16px' }}>
+            <button
+              className="settings-button primary"
+              onClick={() => useStore.getState().openCreateCron()}
+              style={{ width: '100%', padding: '8px', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" width="16" height="16">
+                <path d="M12 5v14M5 12h14" />
+              </svg>
+              Create New Cron Job
+            </button>
+          </div>
           {filteredCronJobs.length > 0 ? (
             filteredCronJobs.map((job, index) => (
               <CronJobItem
@@ -328,16 +340,16 @@ function CronJobItem({ job, isSelected, onClick }: CronJobItemProps) {
       onKeyDown={(e) => e.key === 'Enter' && onClick()}
     >
       <div className={`cron-status ${job.status}`} />
-      <div className="cron-content">
-        <div className="cron-name">{job.name}</div>
-        <div className="cron-schedule">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+      <div className="cron-content" style={{ minWidth: 0 }}>
+        <div className="cron-name" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{job.name}</div>
+        <div className="cron-schedule" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'flex', alignItems: 'center' }}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" style={{ flexShrink: 0 }}>
             <circle cx="12" cy="12" r="10" />
             <path d="M12 6v6l4 2" />
           </svg>
-          <span>{job.schedule}</span>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={job.schedule}>{job.schedule}</span>
         </div>
-        <div className="cron-next">
+        <div className="cron-next" style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {job.status === 'paused' ? 'Paused' : `Next run: ${job.nextRun || 'Unknown'}`}
         </div>
       </div>

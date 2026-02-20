@@ -1,12 +1,13 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useStore } from '../store'
 
-type Tab = 'agent-defaults' | 'tools-memory' | 'channels'
+type Tab = 'agent-defaults' | 'tools-memory' | 'channels' | 'features'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'agent-defaults', label: 'Agent Defaults' },
   { id: 'tools-memory', label: 'Tools & Memory' },
   { id: 'channels', label: 'Channels' },
+  { id: 'features', label: 'Features' },
 ]
 
 const THINKING_OPTIONS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh']
@@ -218,17 +219,22 @@ export function ServerSettingsView() {
   if (loading) {
     return (
       <div className="detail-view">
+        <div className="detail-header">
+          <button className="detail-back" onClick={closeDetailView} aria-label="Back to chat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            <span>Back</span>
+          </button>
+          <div className="detail-title-section">
+            <div>
+              <h1 className="detail-title">Server Settings</h1>
+              <p className="detail-subtitle">Loading server configuration...</p>
+            </div>
+          </div>
+        </div>
         <div className="detail-content">
           <div className="server-settings">
-            <div className="settings-header">
-              <button className="detail-back" onClick={closeDetailView}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M19 12H5M12 19l-7-7 7-7" />
-                </svg>
-                <span>Back</span>
-              </button>
-              <h1 className="settings-title">Server Settings</h1>
-            </div>
             <div className="settings-loading">Loading server configuration...</div>
           </div>
         </div>
@@ -239,17 +245,22 @@ export function ServerSettingsView() {
   if (error && !editedConfig) {
     return (
       <div className="detail-view">
+        <div className="detail-header">
+          <button className="detail-back" onClick={closeDetailView} aria-label="Back to chat">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M19 12H5M12 19l-7-7 7-7" />
+            </svg>
+            <span>Back</span>
+          </button>
+          <div className="detail-title-section">
+            <div>
+              <h1 className="detail-title">Server Settings</h1>
+              <p className="detail-subtitle">Error loading configuration</p>
+            </div>
+          </div>
+        </div>
         <div className="detail-content">
           <div className="server-settings">
-            <div className="settings-header">
-              <button className="detail-back" onClick={closeDetailView}>
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                  <path d="M19 12H5M12 19l-7-7 7-7" />
-                </svg>
-                <span>Back</span>
-              </button>
-              <h1 className="settings-title">Server Settings</h1>
-            </div>
             <div className="settings-error">
               <p>{error}</p>
               <button className="btn btn-secondary" onClick={loadConfig}>Retry</button>
@@ -262,18 +273,41 @@ export function ServerSettingsView() {
 
   return (
     <div className="detail-view">
-      <div className="detail-content">
-        <div className="server-settings">
-          <div className="settings-header">
-            <button className="detail-back" onClick={closeDetailView}>
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <path d="M19 12H5M12 19l-7-7 7-7" />
-              </svg>
-              <span>Back</span>
-            </button>
-            <h1 className="settings-title">Server Settings</h1>
+      <div className="detail-header">
+        <button className="detail-back" onClick={closeDetailView} aria-label="Back to chat">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M19 12H5M12 19l-7-7 7-7" />
+          </svg>
+          <span>Back</span>
+        </button>
+        <div className="detail-title-section">
+          <div>
+            <h1 className="detail-title">Server Settings</h1>
+            <p className="detail-subtitle">Configure OpenClaw defaults, tools, channels, and features</p>
           </div>
+        </div>
+        <div className="detail-actions">
+          {tab !== 'features' && isDirty() && (
+            <div className="settings-actions" style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              {saveResult === 'success' && <span className="save-feedback success">Saved! Restarting...</span>}
+              {saveResult === 'error' && <span className="save-feedback error">Save failed</span>}
+              <button className="settings-button secondary" onClick={handleDiscard} disabled={saving}>
+                Discard
+              </button>
+              <button
+                className="settings-button primary"
+                onClick={handleSave}
+                disabled={saving}
+              >
+                {saving ? 'Saving...' : 'Save Settings'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
 
+      <div className="detail-content">
+        <div className="server-settings" style={{ padding: 0 }}>
           <div className="settings-tabs">
             {TABS.map(t => (
               <button
@@ -296,20 +330,10 @@ export function ServerSettingsView() {
             {tab === 'channels' && (
               <ChannelsTab val={val} setValue={setValue} />
             )}
+            {tab === 'features' && (
+              <FeaturesTab />
+            )}
           </div>
-
-          {isDirty() && (
-            <div className="settings-save-bar">
-              {saveResult === 'success' && <span className="save-feedback success">Settings saved</span>}
-              {saveResult === 'error' && <span className="save-feedback error">Save failed</span>}
-              <button className="btn btn-secondary" onClick={handleDiscard} disabled={saving}>
-                Discard
-              </button>
-              <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
-                {saving ? 'Saving...' : 'Save'}
-              </button>
-            </div>
-          )}
         </div>
       </div>
     </div>
@@ -667,5 +691,64 @@ function SettingsToggle({ checked, onChange }: { checked: boolean; onChange: (v:
       />
       <span className="toggle-slider"></span>
     </label>
+  )
+}
+function FeaturesTab() {
+  const { client } = useStore()
+  const [ttsStatus, setTtsStatus] = useState<any>(null)
+  const [wakeStatus, setWakeStatus] = useState<any>(null)
+
+  useEffect(() => {
+    if (!client) return
+    client.getTtsStatus().then(setTtsStatus).catch(() => { })
+    client.getVoicewake().then(setWakeStatus).catch(() => { })
+  }, [client])
+
+  const toggleTts = async (enabled: boolean) => {
+    if (!client) return
+    await client.setTtsEnable(enabled)
+    setTtsStatus((prev: any) => ({ ...prev, enabled }))
+  }
+
+  const toggleWake = async (enabled: boolean) => {
+    if (!client) return
+    await client.setVoicewake({ enabled, sensitivity: wakeStatus?.sensitivity })
+    setWakeStatus((prev: any) => ({ ...prev, enabled }))
+  }
+
+  return (
+    <>
+      <div className="settings-section">
+        <h3>Text-to-Speech (TTS)</h3>
+        <p className="setting-description">Enable or disable TTS functionality for voice interactions.</p>
+
+        <div className="setting-row">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={!!ttsStatus?.enabled}
+              onChange={(e) => toggleTts(e.target.checked)}
+            />
+            <span>Enable TTS</span>
+          </label>
+        </div>
+      </div>
+
+      <div className="settings-section">
+        <h3>Voice Wake</h3>
+        <p className="setting-description">Listen for wake words ('Hey Claw') continuously.</p>
+
+        <div className="setting-row">
+          <label className="checkbox-label">
+            <input
+              type="checkbox"
+              checked={!!wakeStatus?.enabled}
+              onChange={(e) => toggleWake(e.target.checked)}
+            />
+            <span>Enable Voice Wake</span>
+          </label>
+        </div>
+      </div>
+    </>
   )
 }

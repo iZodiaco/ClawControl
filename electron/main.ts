@@ -137,6 +137,12 @@ app.whenReady().then(() => {
   if (process.platform === 'win32') {
     app.setAppUserModelId('ClawControl')
   }
+
+  // Set custom dock icon for macOS
+  if (process.platform === 'darwin') {
+    app.dock.setIcon(join(__dirname, '../build/icon.png'))
+  }
+
   loadTrustedHosts()
   createWindow()
 })

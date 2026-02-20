@@ -1,8 +1,16 @@
+import { useEffect } from 'react'
 import { useStore } from '../store'
 import { trustHost, openExternal, getPlatform, clearTLSFingerprint } from '../lib/platform'
 
 export function CertErrorModal() {
-  const { showCertError, certErrorUrl, hideCertErrorModal, connect } = useStore()
+  const { showCertError, certErrorUrl, hideCertErrorModal, connect, connected } = useStore()
+
+  // Auto-close if connection re-establishes naturally (e.g., VPN blip resolves)
+  useEffect(() => {
+    if (showCertError && connected) {
+      hideCertErrorModal()
+    }
+  }, [showCertError, connected, hideCertErrorModal])
 
   if (!showCertError || !certErrorUrl) return null
 
