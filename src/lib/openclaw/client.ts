@@ -7,7 +7,7 @@ import type {
 } from './types'
 import type { DeviceIdentity, DeviceConnectField } from '../device-identity'
 import { signChallenge } from '../device-identity'
-import { stripAnsi, extractToolResultText, extractTextFromContent, isHeartbeatContent, isNoiseContent, stripSystemNotifications } from './utils'
+import { stripAnsi, extractToolResultText, extractTextFromContent, extractImagesFromContent, isHeartbeatContent, isNoiseContent, stripSystemNotifications } from './utils'
 import * as sessionsApi from './sessions'
 import * as chatApi from './chat'
 import * as agentsApi from './agents'
@@ -627,7 +627,8 @@ export class OpenClawClient {
           // any truncated streaming placeholder.
           if (payload.message) {
             const text = stripSystemNotifications(extractTextFromContent(payload.message.content)).trim()
-            if (text && !isNoiseContent(text)) {
+            const images = extractImagesFromContent(payload.message.content)
+            if ((text && !isNoiseContent(text)) || images.length > 0) {
               const id =
                 (typeof payload.message.id === 'string' && payload.message.id) ||
                 (typeof payload.runId === 'string' && payload.runId) ||
@@ -640,6 +641,7 @@ export class OpenClawClient {
                 role: payload.message.role,
                 content: isHeartbeatContent(text) ? '\u2764\uFE0F' : text,
                 timestamp: new Date(tsMs).toISOString(),
+                images: images.length > 0 ? images : undefined,
                 sessionKey: eventSessionKey
               })
             }
@@ -781,6 +783,7 @@ export class OpenClawClient {
     content: string
     agentId?: string
     thinking?: boolean
+    attachments?: chatApi.ChatAttachmentInput[]
   }): Promise<{ sessionKey?: string }> {
     return chatApi.sendMessage(this.call.bind(this), params)
   }

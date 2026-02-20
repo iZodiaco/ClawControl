@@ -6,6 +6,13 @@ export interface Message {
   content: string
   timestamp: string
   thinking?: string
+  images?: MessageImage[]
+}
+
+export interface MessageImage {
+  url: string
+  mimeType?: string
+  alt?: string
 }
 
 export interface Session {

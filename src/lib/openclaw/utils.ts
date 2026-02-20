@@ -16,7 +16,7 @@ export function stripAnsi(text: string): string {
     .replace(/\x1b[()#][A-Z0-9]/g, '')
     // Remaining ESC + one character (e.g. ESC>, ESC=, ESCM, etc.)
     // eslint-disable-next-line no-control-regex
-    .replace(/\x1b[A-Z=><!*+\-\/]/gi, '')
+    .replace(/\x1b[A-Z=><!*+\-/]/gi, '')
     // C1 control codes (0x80-0x9F range, e.g. \x9b as CSI)
     // eslint-disable-next-line no-control-regex
     .replace(/\x9b[0-9;?]*[A-Za-z]/g, '')
@@ -60,6 +60,70 @@ export function extractTextFromContent(content: unknown): string {
     text = String((content as any).text)
   }
   return stripAnsi(text)
+}
+
+export function extractImagesFromContent(content: unknown): Array<{ url: string; mimeType?: string; alt?: string }> {
+  if (!Array.isArray(content)) return []
+  const images: Array<{ url: string; mimeType?: string; alt?: string }> = []
+
+  for (const block of content) {
+    if (!block || typeof block !== 'object') continue
+    const b = block as Record<string, unknown>
+    const type = typeof b.type === 'string' ? b.type : ''
+    const alt = typeof b.alt === 'string' ? b.alt : undefined
+    const blockMime = typeof b.mimeType === 'string' ? b.mimeType : undefined
+
+    const pushDataUrl = (raw: unknown, mime?: string) => {
+      if (typeof raw !== 'string') return
+      const trimmed = raw.trim()
+      if (!trimmed) return
+      if (trimmed.startsWith('data:image/')) {
+        images.push({ url: trimmed, mimeType: mime || blockMime, alt })
+        return
+      }
+      const dataMime = (mime || blockMime || 'image/png').trim()
+      images.push({ url: `data:${dataMime};base64,${trimmed}`, mimeType: dataMime, alt })
+    }
+
+    const pushUrl = (raw: unknown, mime?: string) => {
+      if (typeof raw !== 'string') return
+      const trimmed = raw.trim()
+      if (!trimmed) return
+      if (/^https?:\/\//i.test(trimmed) || /^data:image\//i.test(trimmed)) {
+        images.push({ url: trimmed, mimeType: mime || blockMime, alt })
+      }
+    }
+
+    if (type === 'image' || type === 'input_image' || type === 'output_image') {
+      pushUrl(b.url)
+      pushDataUrl(b.data)
+
+      const source = b.source as Record<string, unknown> | undefined
+      if (source && typeof source === 'object') {
+        const sourceType = typeof source.type === 'string' ? source.type : ''
+        const sourceMime = typeof source.mediaType === 'string' ? source.mediaType : undefined
+        if (sourceType === 'url') {
+          pushUrl(source.url, sourceMime)
+        } else if (sourceType === 'base64') {
+          pushDataUrl(source.data, sourceMime)
+        }
+      }
+
+      const image = b.image as Record<string, unknown> | undefined
+      if (image && typeof image === 'object') {
+        pushUrl(image.url)
+        pushDataUrl(image.data)
+        pushUrl(image.source)
+      }
+    }
+  }
+
+  const seen = new Set<string>()
+  return images.filter((img) => {
+    if (!img.url || seen.has(img.url)) return false
+    seen.add(img.url)
+    return true
+  })
 }
 
 export function isHeartbeatContent(text: string): boolean {

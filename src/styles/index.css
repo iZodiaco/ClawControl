@@ -1961,6 +1961,47 @@ a {
   border-top: 1px solid var(--border-subtle);
 }
 
+.image-attachments {
+  max-width: 900px;
+  margin: 0 auto var(--space-sm);
+  display: flex;
+  gap: var(--space-sm);
+  overflow-x: auto;
+}
+
+.image-attachment-item {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+
+.image-attachment-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.image-attachment-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.75);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
 .input-container {
   max-width: 900px;
   margin: 0 auto;
@@ -2009,6 +2050,34 @@ a {
   color: #000;
   transition: all var(--transition-fast);
   box-shadow: var(--glow-cyan);
+}
+
+.attach-btn {
+  width: 48px;
+  height: 48px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.attach-btn:hover:not(:disabled) {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+}
+
+.attach-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.attach-btn svg {
+  width: 20px;
+  height: 20px;
 }
 
 .send-btn:hover:not(:disabled) {
@@ -2774,6 +2843,21 @@ a {
 
 .markdown-content a:hover {
   color: var(--accent-cyan-dim);
+}
+
+.message-images {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-sm);
+  margin-top: var(--space-sm);
+}
+
+.message-image {
+  max-width: min(420px, 100%);
+  max-height: 420px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle);
+  object-fit: contain;
 }
 
 .empty-content {
@@ -4086,6 +4170,11 @@ body.capacitor-mobile .voice-btn {
   height: 52px;
 }
 
+body.capacitor-mobile .attach-btn {
+  width: 52px;
+  height: 52px;
+}
+
 /* Always show delete buttons on mobile (no hover) */
 body.capacitor-mobile .session-delete {
   opacity: 0.6;
@@ -4139,6 +4228,10 @@ body.capacitor-mobile.keyboard-visible .chat-area {
   }
 
   .voice-btn:hover:not(:disabled) {
+    transform: none;
+  }
+
+  .attach-btn:hover:not(:disabled) {
     transform: none;
   }
 

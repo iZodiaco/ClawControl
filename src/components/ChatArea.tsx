@@ -242,7 +242,7 @@ const MessageBubble = memo(function MessageBubble({
               <div className="thinking-content">{message.thinking}</div>
             </div>
           )}
-          <MessageContent content={message.content} />
+          <MessageContent content={message.content} images={message.images} />
         </div>
       </div>
 
@@ -371,7 +371,7 @@ renderer.code = function (this: unknown, ...args: Parameters<typeof originalCode
   return `<div class="code-block-wrapper"><button class="code-copy-btn" type="button" aria-label="Copy code"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>${html}</div>`
 }
 
-function MessageContent({ content }: { content: string }) {
+function MessageContent({ content, images }: { content: string; images?: Message['images'] }) {
   const ref = useRef<HTMLDivElement>(null)
   const html = useMemo(
     () => marked.parse(stripAnsi(content), { async: false, renderer }) as string,
@@ -396,5 +396,22 @@ function MessageContent({ content }: { content: string }) {
     return () => el.removeEventListener('click', handler)
   }, [html])
 
-  return <div className="markdown-content" ref={ref} dangerouslySetInnerHTML={{ __html: html }} />
+  return (
+    <div>
+      <div className="markdown-content" ref={ref} dangerouslySetInnerHTML={{ __html: html }} />
+      {images && images.length > 0 && (
+        <div className="message-images">
+          {images.map((img, idx) => (
+            <img
+              key={`${img.url}-${idx}`}
+              className="message-image"
+              src={img.url}
+              alt={img.alt || 'Attached image'}
+              loading="lazy"
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
 }

@@ -17,9 +17,17 @@ type BrowserSpeechRecognition = {
 }
 
 type NativeRecognitionMode = 'none' | 'wake' | 'dictation'
+type PendingImageAttachment = {
+  id: string
+  fileName: string
+  mimeType: string
+  content: string
+  previewUrl: string
+}
 
 const DEFAULT_WAKE_TRIGGERS = ['openclaw', 'claude', 'computer']
 const WAKE_COOLDOWN_MS = 3000
+const MAX_IMAGE_BYTES = 5_000_000
 
 function joinDictatedText(existing: string, dictated: string): string {
   const trimmed = dictated.trim()
@@ -60,8 +68,10 @@ export function InputArea() {
   const [voiceError, setVoiceError] = useState<string | null>(null)
   const [wakeEnabled, setWakeEnabled] = useState(false)
   const [wakeTriggers, setWakeTriggers] = useState<string[]>(DEFAULT_WAKE_TRIGGERS)
+  const [attachedImages, setAttachedImages] = useState<PendingImageAttachment[]>([])
 
   const textareaRef = useRef<HTMLTextAreaElement>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const dictationBrowserRecognitionRef = useRef<BrowserSpeechRecognition | null>(null)
   const wakeBrowserRecognitionRef = useRef<BrowserSpeechRecognition | null>(null)
   const nativeModeRef = useRef<NativeRecognitionMode>('none')
@@ -80,6 +90,17 @@ export function InputArea() {
   const isStreaming = useStore(selectIsStreaming)
 
   const maxLength = 4000
+
+  const readFileAsDataUrl = (file: File) =>
+    new Promise<string>((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        if (typeof reader.result === 'string') resolve(reader.result)
+        else reject(new Error('Failed to read image data'))
+      }
+      reader.onerror = () => reject(new Error('Failed to read image data'))
+      reader.readAsDataURL(file)
+    })
 
   useEffect(() => { wakeEnabledRef.current = wakeEnabled }, [wakeEnabled])
   useEffect(() => { wakeTriggersRef.current = wakeTriggers }, [wakeTriggers])
@@ -443,11 +464,13 @@ export function InputArea() {
   }, [message])
 
   const handleSubmit = async () => {
-    if (!message.trim() || !connected) return
+    if ((!message.trim() && attachedImages.length === 0) || !connected) return
 
     const currentMessage = message
+    const currentAttachments = attachedImages
     setMessage('')
-    await sendMessage(currentMessage)
+    setAttachedImages([])
+    await sendMessage(currentMessage, currentAttachments)
   }
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -489,9 +512,88 @@ export function InputArea() {
     }
   }
 
+  const handleAttachClick = () => {
+    fileInputRef.current?.click()
+  }
+
+  const handleRemoveAttachment = (id: string) => {
+    setAttachedImages((current) => current.filter((img) => img.id !== id))
+  }
+
+  const handleFileSelected = async (e: ChangeEvent<HTMLInputElement>) => {
+    const files = Array.from(e.target.files || [])
+    if (files.length === 0) return
+
+    const next: PendingImageAttachment[] = []
+    for (const file of files) {
+      if (!file.type.startsWith('image/')) continue
+      if (file.size > MAX_IMAGE_BYTES) {
+        setVoiceError(`Image ${file.name} exceeds ${(MAX_IMAGE_BYTES / 1_000_000).toFixed(1)}MB limit.`)
+        continue
+      }
+
+      try {
+        const dataUrl = await readFileAsDataUrl(file)
+        const content = dataUrl.includes(',') ? dataUrl.split(',')[1] || '' : ''
+        if (!content) continue
+        next.push({
+          id: `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          fileName: file.name,
+          mimeType: file.type || 'image/png',
+          content,
+          previewUrl: dataUrl,
+        })
+      } catch {
+        setVoiceError(`Failed to process ${file.name}`)
+      }
+    }
+
+    if (next.length > 0) {
+      setAttachedImages((current) => [...current, ...next])
+      setVoiceError(null)
+    }
+    e.target.value = ''
+  }
+
   return (
     <div className="input-area">
+      {attachedImages.length > 0 && (
+        <div className="image-attachments" aria-label="Attached images">
+          {attachedImages.map((img) => (
+            <div key={img.id} className="image-attachment-item">
+              <img src={img.previewUrl} alt={img.fileName} />
+              <button
+                type="button"
+                className="image-attachment-remove"
+                onClick={() => handleRemoveAttachment(img.id)}
+                aria-label={`Remove ${img.fileName}`}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="input-container">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          multiple
+          onChange={handleFileSelected}
+          style={{ display: 'none' }}
+        />
+        <button
+          className="attach-btn"
+          onClick={handleAttachClick}
+          disabled={!connected || isStreaming}
+          aria-label="Attach images"
+          title="Attach images"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M21.44 11.05 12.25 20.24a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 1 1 5.66 5.66L9.41 17.4a2 2 0 0 1-2.82-2.82l8.49-8.48" />
+          </svg>
+        </button>
         <textarea
           ref={textareaRef}
           value={message}
@@ -535,7 +637,7 @@ export function InputArea() {
           <button
             className="send-btn"
             onClick={handleSubmit}
-            disabled={!message.trim() || !connected}
+            disabled={(!message.trim() && attachedImages.length === 0) || !connected}
             aria-label="Send message"
           >
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">

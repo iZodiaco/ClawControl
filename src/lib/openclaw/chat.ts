@@ -1,7 +1,7 @@
 // OpenClaw Client - Chat API Methods
 
 import type { Message, RpcCaller } from './types'
-import { stripAnsi, stripSystemNotifications, stripConversationMetadata } from './utils'
+import { stripAnsi, stripSystemNotifications, stripConversationMetadata, extractImagesFromContent } from './utils'
 
 export interface HistoryToolCall {
   toolCallId: string
@@ -15,6 +15,13 @@ export interface HistoryToolCall {
 export interface ChatHistoryResult {
   messages: Message[]
   toolCalls: HistoryToolCall[]
+}
+
+export interface ChatAttachmentInput {
+  type?: string
+  mimeType?: string
+  fileName?: string
+  content: string
 }
 
 export async function getSessionMessages(call: RpcCaller, sessionId: string): Promise<ChatHistoryResult> {
@@ -59,6 +66,7 @@ export async function getSessionMessages(call: RpcCaller, sessionId: string): Pr
         let rawContent = msg.content ?? msg.body ?? msg.text
         let content = ''
         let thinking = msg.thinking
+        let images: Message['images'] = []
 
         // Track last assistant message for tool call anchoring
         if (normalizedRole === 'assistant') {
@@ -66,6 +74,7 @@ export async function getSessionMessages(call: RpcCaller, sessionId: string): Pr
         }
 
         if (Array.isArray(rawContent)) {
+          images = extractImagesFromContent(rawContent)
           // Log content block types for debugging tool call extraction
           const blockTypes = rawContent.map((c: any) => c.type || 'no-type')
           if (blockTypes.some((t: string) => t.toLowerCase().includes('tool'))) {
@@ -216,14 +225,15 @@ export async function getSessionMessages(call: RpcCaller, sessionId: string): Pr
 
         // Filter out non-assistant entries without displayable text content.
         // Keep empty assistant messages so tool calls can anchor to them.
-        if (!content && normalizedRole !== 'assistant') return null
+        if (!content && images.length === 0 && normalizedRole !== 'assistant') return null
 
         return {
           id: msgId,
           role: normalizedRole,
           content: stripAnsi(content),
           thinking: thinking ? stripAnsi(thinking) : thinking,
-          timestamp: new Date(msg.timestamp || m.timestamp || msg.ts || m.ts || msg.createdAt || m.createdAt || Date.now()).toISOString()
+          timestamp: new Date(msg.timestamp || m.timestamp || msg.ts || m.ts || msg.createdAt || m.createdAt || Date.now()).toISOString(),
+          images: images.length > 0 ? images : undefined
         }
       }) as (Message | null)[]
 
@@ -236,7 +246,8 @@ export async function getSessionMessages(call: RpcCaller, sessionId: string): Pr
         const prev = filteredMessages[i - 1]
         if (
           curr.role === 'assistant' && prev.role === 'assistant' &&
-          !curr.content.trim()
+          !curr.content.trim() &&
+          (!curr.images || curr.images.length === 0)
         ) {
           // Re-anchor tool calls from this empty message to the previous assistant
           for (const tc of toolCalls) {
@@ -288,6 +299,7 @@ export async function sendMessage(call: RpcCaller, params: {
   content: string
   agentId?: string
   thinking?: boolean
+  attachments?: ChatAttachmentInput[]
 }): Promise<{ sessionKey?: string }> {
   const idempotencyKey = crypto.randomUUID()
   const payload: Record<string, unknown> = {
@@ -299,6 +311,9 @@ export async function sendMessage(call: RpcCaller, params: {
 
   if (params.thinking) {
     payload.thinking = 'normal'
+  }
+  if (params.attachments && params.attachments.length > 0) {
+    payload.attachments = params.attachments
   }
 
   const result = await call<any>('chat.send', payload)

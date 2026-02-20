@@ -170,7 +170,7 @@ interface AppState {
   initializeApp: () => Promise<void>
   connect: () => Promise<void>
   disconnect: () => void
-  sendMessage: (content: string) => Promise<void>
+  sendMessage: (content: string, attachments?: Array<{ type?: string; mimeType?: string; fileName?: string; content: string; previewUrl?: string }>) => Promise<void>
   abortChat: () => Promise<void>
   fetchSessions: () => Promise<void>
   fetchAgents: () => Promise<void>
@@ -1288,7 +1288,8 @@ export const useStore = create<AppState>()(
               role: msgPayload.role,
               content: msgPayload.content,
               timestamp: msgPayload.timestamp,
-              thinking: msgPayload.thinking
+              thinking: msgPayload.thinking,
+              images: msgPayload.images
             }
             let replacedStreaming = false
 
@@ -1334,7 +1335,7 @@ export const useStore = create<AppState>()(
                 const updated = [...state.messages]
                 // If the finalized message has no content, remove it (tool-call-only anchor)
                 // and re-anchor its tool calls to the new final message
-                if (!finalizedMsg.content.trim()) {
+                if (!finalizedMsg.content.trim() && (!finalizedMsg.images || finalizedMsg.images.length === 0)) {
                   updated.splice(finalizedIdx, 1)
                 } else {
                   // Keep it but give it the canonical id if it's the same content
@@ -1365,7 +1366,7 @@ export const useStore = create<AppState>()(
 
             // Only notify for non-streamed responses (streamEnd handles streamed ones)
             if (message.role === 'assistant' && !replacedStreaming) {
-              const preview = message.content.slice(0, 100)
+              const preview = message.content.slice(0, 100) || (message.images?.length ? 'Image response' : 'New response')
               const { notificationsEnabled, streamingSessionId: msgSession, currentSessionId: activeSession, agents, currentAgentId } = get()
               if (shouldNotify(notificationsEnabled, msgSession, activeSession)) {
                 const name = resolveAgentName(msgSession, agents, currentAgentId)
@@ -1504,7 +1505,7 @@ export const useStore = create<AppState>()(
               if (resolvedKey === activeSession) {
                 const lastMsg = messages[messages.length - 1]
                 if (lastMsg?.role === 'assistant') {
-                  const preview = lastMsg.content.slice(0, 100)
+                  const preview = lastMsg.content.slice(0, 100) || (lastMsg.images?.length ? 'Image response' : 'New response')
                   if (shouldNotify(notificationsEnabled, resolvedKey, activeSession)) {
                     Platform.showNotification(`${agentName} responded`, preview).catch(() => { })
                   }
@@ -1725,9 +1726,10 @@ export const useStore = create<AppState>()(
         set({ client: null, connected: false })
       },
 
-      sendMessage: async (content: string) => {
+      sendMessage: async (content: string, attachments = []) => {
         const { client, currentSessionId, thinkingEnabled, currentAgentId } = get()
-        if (!client || !content.trim()) return
+        const trimmed = content.trim()
+        if (!client || (!trimmed && attachments.length === 0)) return
 
         let sessionId = currentSessionId
         if (!sessionId) {
@@ -1757,7 +1759,12 @@ export const useStore = create<AppState>()(
           id: Date.now().toString(),
           role: 'user',
           content,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          images: attachments.length > 0
+            ? attachments
+                .filter(a => typeof a.previewUrl === 'string' && a.previewUrl.trim())
+                .map(a => ({ url: a.previewUrl as string, mimeType: a.mimeType }))
+            : undefined
         }
         set((state) => ({ messages: [...state.messages, userMessage] }))
 
@@ -1765,9 +1772,10 @@ export const useStore = create<AppState>()(
         try {
           await client.sendMessage({
             sessionId: sessionId,
-            content,
+            content: trimmed,
             agentId: currentAgentId || undefined,
-            thinking: thinkingEnabled
+            thinking: thinkingEnabled,
+            attachments: attachments.map(({ previewUrl: _previewUrl, ...attachment }) => attachment)
           })
         } catch (err) {
           const errMsg = err instanceof Error ? err.message : 'Unknown error'
