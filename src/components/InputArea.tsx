@@ -1,13 +1,438 @@
 import { useState, useRef, useEffect, KeyboardEvent, ChangeEvent } from 'react'
+import { SpeechRecognition } from '@capacitor-community/speech-recognition'
 import { useStore, selectIsStreaming } from '../store'
+import { getPlatform, isNativeMobile } from '../lib/platform'
+
+type BrowserSpeechRecognition = {
+  lang: string
+  continuous: boolean
+  interimResults: boolean
+  maxAlternatives: number
+  start: () => void
+  stop: () => void
+  onstart: (() => void) | null
+  onend: (() => void) | null
+  onerror: ((event: any) => void) | null
+  onresult: ((event: any) => void) | null
+}
+
+type NativeRecognitionMode = 'none' | 'wake' | 'dictation'
+
+const DEFAULT_WAKE_TRIGGERS = ['openclaw', 'claude', 'computer']
+const WAKE_COOLDOWN_MS = 3000
+
+function joinDictatedText(existing: string, dictated: string): string {
+  const trimmed = dictated.trim()
+  if (!trimmed) return existing
+  const separator = existing && !/\s$/.test(existing) ? ' ' : ''
+  return `${existing}${separator}${trimmed}`
+}
+
+function getBrowserSpeechRecognitionCtor(): (new () => BrowserSpeechRecognition) | null {
+  const win = window as any
+  return win.SpeechRecognition || win.webkitSpeechRecognition || null
+}
+
+function escapeRegex(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+}
+
+function normalizeWakeTriggers(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return DEFAULT_WAKE_TRIGGERS
+  const cleaned = raw
+    .map(item => (typeof item === 'string' ? item.trim().toLowerCase() : ''))
+    .filter(Boolean)
+  return cleaned.length > 0 ? cleaned : DEFAULT_WAKE_TRIGGERS
+}
+
+function containsWakeTrigger(text: string, triggers: string[]): boolean {
+  const source = text.toLowerCase()
+  return triggers.some(trigger => {
+    const pattern = new RegExp(`(^|\\s|[.,!?;:])${escapeRegex(trigger)}($|\\s|[.,!?;:])`, 'i')
+    return pattern.test(source)
+  })
+}
 
 export function InputArea() {
   const [message, setMessage] = useState('')
+  const [isListening, setIsListening] = useState(false)
+  const [voiceSupported, setVoiceSupported] = useState(false)
+  const [voiceError, setVoiceError] = useState<string | null>(null)
+  const [wakeEnabled, setWakeEnabled] = useState(false)
+  const [wakeTriggers, setWakeTriggers] = useState<string[]>(DEFAULT_WAKE_TRIGGERS)
+
   const textareaRef = useRef<HTMLTextAreaElement>(null)
-  const { sendMessage, abortChat, connected } = useStore()
+  const dictationBrowserRecognitionRef = useRef<BrowserSpeechRecognition | null>(null)
+  const wakeBrowserRecognitionRef = useRef<BrowserSpeechRecognition | null>(null)
+  const nativeModeRef = useRef<NativeRecognitionMode>('none')
+  const messageBeforeDictationRef = useRef('')
+  const wakeCooldownUntilRef = useRef(0)
+  const wakeRestartTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const wakeEnabledRef = useRef(false)
+  const wakeTriggersRef = useRef<string[]>(DEFAULT_WAKE_TRIGGERS)
+  const voiceSupportedRef = useRef(false)
+  const connectedRef = useRef(false)
+  const isStreamingRef = useRef(false)
+  const isListeningRef = useRef(false)
+  const clientRef = useRef<any>(null)
+
+  const { sendMessage, abortChat, connected, client } = useStore()
   const isStreaming = useStore(selectIsStreaming)
 
   const maxLength = 4000
+
+  useEffect(() => { wakeEnabledRef.current = wakeEnabled }, [wakeEnabled])
+  useEffect(() => { wakeTriggersRef.current = wakeTriggers }, [wakeTriggers])
+  useEffect(() => { voiceSupportedRef.current = voiceSupported }, [voiceSupported])
+  useEffect(() => { connectedRef.current = connected }, [connected])
+  useEffect(() => { isStreamingRef.current = isStreaming }, [isStreaming])
+  useEffect(() => { isListeningRef.current = isListening }, [isListening])
+  useEffect(() => { clientRef.current = client }, [client])
+
+  const clearWakeRestartTimer = () => {
+    if (wakeRestartTimeoutRef.current) {
+      clearTimeout(wakeRestartTimeoutRef.current)
+      wakeRestartTimeoutRef.current = null
+    }
+  }
+
+  const shouldListenWake = () =>
+    wakeEnabledRef.current &&
+    voiceSupportedRef.current &&
+    connectedRef.current &&
+    !isStreamingRef.current &&
+    !isListeningRef.current
+
+  const scheduleWakeRestart = () => {
+    clearWakeRestartTimer()
+    wakeRestartTimeoutRef.current = setTimeout(() => {
+      wakeRestartTimeoutRef.current = null
+      void maybeStartWakeRecognition()
+    }, 700)
+  }
+
+  const stopWakeRecognition = async () => {
+    clearWakeRestartTimer()
+
+    const wakeBrowser = wakeBrowserRecognitionRef.current
+    if (wakeBrowser) {
+      wakeBrowser.onstart = null
+      wakeBrowser.onend = null
+      wakeBrowser.onerror = null
+      wakeBrowser.onresult = null
+      wakeBrowser.stop()
+      wakeBrowserRecognitionRef.current = null
+    }
+
+    if (isNativeMobile() && nativeModeRef.current === 'wake') {
+      try {
+        const { listening } = await SpeechRecognition.isListening()
+        if (listening) await SpeechRecognition.stop()
+      } catch {
+        // ignore
+      }
+      await SpeechRecognition.removeAllListeners().catch(() => {})
+      nativeModeRef.current = 'none'
+    }
+  }
+
+  const stopDictationRecognition = async () => {
+    const dictationBrowser = dictationBrowserRecognitionRef.current
+    if (dictationBrowser) {
+      dictationBrowser.onstart = null
+      dictationBrowser.onend = null
+      dictationBrowser.onerror = null
+      dictationBrowser.onresult = null
+      dictationBrowser.stop()
+      dictationBrowserRecognitionRef.current = null
+    }
+
+    if (isNativeMobile() && nativeModeRef.current === 'dictation') {
+      try {
+        const { listening } = await SpeechRecognition.isListening()
+        if (listening) await SpeechRecognition.stop()
+      } catch {
+        // ignore
+      }
+      await SpeechRecognition.removeAllListeners().catch(() => {})
+      nativeModeRef.current = 'none'
+    }
+
+    setIsListening(false)
+  }
+
+  const stopAllRecognition = async () => {
+    await stopDictationRecognition()
+    await stopWakeRecognition()
+  }
+
+  const ensureNativePermissions = async () => {
+    const { available } = await SpeechRecognition.available()
+    if (!available) {
+      throw new Error('Speech recognition is not available on this device.')
+    }
+    const permissionState = await SpeechRecognition.checkPermissions()
+    if (permissionState.speechRecognition === 'granted') return
+    const requested = await SpeechRecognition.requestPermissions()
+    if (requested.speechRecognition !== 'granted') {
+      throw new Error('Microphone permission is required for voice input.')
+    }
+  }
+
+  const beginWakeCapture = async () => {
+    if (!shouldListenWake()) return
+    wakeCooldownUntilRef.current = Date.now() + WAKE_COOLDOWN_MS
+    await stopWakeRecognition()
+    try {
+      if (isNativeMobile()) {
+        await startNativeDictation()
+      } else {
+        startBrowserDictation()
+      }
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : 'Voice input failed. Please try again.'
+      setVoiceError(errMsg)
+      setIsListening(false)
+      nativeModeRef.current = 'none'
+      scheduleWakeRestart()
+    }
+  }
+
+  const startBrowserWakeRecognition = () => {
+    if (wakeBrowserRecognitionRef.current) return
+    const ctor = getBrowserSpeechRecognitionCtor()
+    if (!ctor) return
+
+    const recognition = new ctor()
+    recognition.lang = 'en-US'
+    recognition.continuous = true
+    recognition.interimResults = true
+    recognition.maxAlternatives = 1
+
+    recognition.onresult = (event: any) => {
+      if (Date.now() < wakeCooldownUntilRef.current) return
+      const transcript = Array.from(event.results ?? [])
+        .map((result: any) => result?.[0]?.transcript || '')
+        .join(' ')
+        .trim()
+      if (!transcript) return
+      if (containsWakeTrigger(transcript, wakeTriggersRef.current)) {
+        void beginWakeCapture()
+      }
+    }
+
+    recognition.onerror = () => {
+      wakeBrowserRecognitionRef.current = null
+      if (shouldListenWake()) scheduleWakeRestart()
+    }
+
+    recognition.onend = () => {
+      wakeBrowserRecognitionRef.current = null
+      if (shouldListenWake() && Date.now() >= wakeCooldownUntilRef.current) {
+        scheduleWakeRestart()
+      }
+    }
+
+    wakeBrowserRecognitionRef.current = recognition
+    try {
+      recognition.start()
+    } catch {
+      wakeBrowserRecognitionRef.current = null
+    }
+  }
+
+  const startNativeWakeRecognition = async () => {
+    if (nativeModeRef.current !== 'none') return
+    if (Date.now() < wakeCooldownUntilRef.current) {
+      scheduleWakeRestart()
+      return
+    }
+
+    await ensureNativePermissions()
+    nativeModeRef.current = 'wake'
+    await SpeechRecognition.removeAllListeners().catch(() => {})
+
+    await SpeechRecognition.addListener('partialResults', (data) => {
+      if (!shouldListenWake() || Date.now() < wakeCooldownUntilRef.current) return
+      const transcript = (data.matches || []).join(' ').trim()
+      if (!transcript) return
+      if (containsWakeTrigger(transcript, wakeTriggersRef.current)) {
+        void beginWakeCapture()
+      }
+    })
+
+    await SpeechRecognition.addListener('listeningState', ({ status }) => {
+      if (status === 'stopped' && nativeModeRef.current === 'wake') {
+        nativeModeRef.current = 'none'
+        if (shouldListenWake() && Date.now() >= wakeCooldownUntilRef.current) {
+          scheduleWakeRestart()
+        }
+      }
+    })
+
+    try {
+      await SpeechRecognition.start({
+        language: 'en-US',
+        maxResults: 3,
+        popup: false,
+        partialResults: true,
+      })
+    } catch {
+      nativeModeRef.current = 'none'
+      await SpeechRecognition.removeAllListeners().catch(() => {})
+      if (shouldListenWake()) scheduleWakeRestart()
+    }
+  }
+
+  const maybeStartWakeRecognition = async () => {
+    if (!shouldListenWake()) return
+    if (Date.now() < wakeCooldownUntilRef.current) {
+      scheduleWakeRestart()
+      return
+    }
+    try {
+      if (isNativeMobile()) {
+        await startNativeWakeRecognition()
+      } else {
+        startBrowserWakeRecognition()
+      }
+    } catch {
+      // No-op: wake listening is best-effort.
+    }
+  }
+
+  const startBrowserDictation = () => {
+    const ctor = getBrowserSpeechRecognitionCtor()
+    if (!ctor) {
+      throw new Error('Speech recognition is not available on this platform.')
+    }
+
+    const recognition = new ctor()
+    messageBeforeDictationRef.current = message
+    recognition.lang = 'en-US'
+    recognition.continuous = false
+    recognition.interimResults = true
+    recognition.maxAlternatives = 1
+
+    recognition.onstart = () => {
+      setIsListening(true)
+      setVoiceError(null)
+    }
+
+    recognition.onresult = (event: any) => {
+      const transcript = Array.from(event.results ?? [])
+        .map((result: any) => result?.[0]?.transcript || '')
+        .join(' ')
+        .trim()
+      if (!transcript) return
+      setMessage(joinDictatedText(messageBeforeDictationRef.current, transcript).slice(0, maxLength))
+      setVoiceError(null)
+    }
+
+    recognition.onerror = () => {
+      setVoiceError('Voice input failed. Please try again.')
+      setIsListening(false)
+      dictationBrowserRecognitionRef.current = null
+      void maybeStartWakeRecognition()
+    }
+
+    recognition.onend = () => {
+      setIsListening(false)
+      dictationBrowserRecognitionRef.current = null
+      void maybeStartWakeRecognition()
+    }
+
+    dictationBrowserRecognitionRef.current = recognition
+    recognition.start()
+  }
+
+  const startNativeDictation = async () => {
+    await ensureNativePermissions()
+    await SpeechRecognition.removeAllListeners().catch(() => {})
+    nativeModeRef.current = 'dictation'
+    messageBeforeDictationRef.current = message
+    setIsListening(true)
+    setVoiceError(null)
+
+    try {
+      const result = await SpeechRecognition.start({
+        language: 'en-US',
+        maxResults: 1,
+        prompt: 'Speak now',
+        popup: getPlatform() === 'android',
+        partialResults: false,
+      })
+      const transcript = result.matches?.[0]?.trim()
+      if (transcript) {
+        setMessage(joinDictatedText(messageBeforeDictationRef.current, transcript).slice(0, maxLength))
+      }
+    } finally {
+      await SpeechRecognition.removeAllListeners().catch(() => {})
+      nativeModeRef.current = 'none'
+      setIsListening(false)
+      void maybeStartWakeRecognition()
+    }
+  }
+
+  useEffect(() => {
+    let cancelled = false
+
+    const detectVoiceSupport = async () => {
+      if (isNativeMobile()) {
+        try {
+          const { available } = await SpeechRecognition.available()
+          if (!cancelled) setVoiceSupported(available)
+          return
+        } catch {
+          if (!cancelled) setVoiceSupported(false)
+          return
+        }
+      }
+      if (!cancelled) setVoiceSupported(Boolean(getBrowserSpeechRecognitionCtor()))
+    }
+
+    detectVoiceSupport()
+    return () => {
+      cancelled = true
+      void stopAllRecognition()
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!client) return
+    let cancelled = false
+
+    const syncWakeConfig = async () => {
+      try {
+        const status = await client.getVoicewake()
+        if (cancelled) return
+        setWakeEnabled(Boolean(status?.enabled))
+        setWakeTriggers(normalizeWakeTriggers(status?.triggers))
+      } catch {
+        // leave defaults
+      }
+    }
+
+    const onWakeChanged = (payload: any) => {
+      if (!payload) return
+      setWakeTriggers(normalizeWakeTriggers(payload?.triggers))
+    }
+
+    syncWakeConfig()
+    client.on('voicewake.changed', onWakeChanged)
+    return () => {
+      cancelled = true
+      client.off('voicewake.changed', onWakeChanged)
+    }
+  }, [client])
+
+  useEffect(() => {
+    if (shouldListenWake()) {
+      void maybeStartWakeRecognition()
+    } else {
+      void stopWakeRecognition()
+    }
+  }, [wakeEnabled, wakeTriggers, voiceSupported, connected, isStreaming, isListening])
 
   useEffect(() => {
     // Auto-resize textarea
@@ -35,6 +460,32 @@ export function InputArea() {
   const handleChange = (e: ChangeEvent<HTMLTextAreaElement>) => {
     if (e.target.value.length <= maxLength) {
       setMessage(e.target.value)
+      if (voiceError) setVoiceError(null)
+    }
+  }
+
+  const handleVoiceInput = async () => {
+    if (!voiceSupported || !connected || isStreaming) return
+
+    if (isListening) {
+      await stopDictationRecognition()
+      await maybeStartWakeRecognition()
+      return
+    }
+
+    try {
+      await stopWakeRecognition()
+      if (isNativeMobile()) {
+        await startNativeDictation()
+      } else {
+        startBrowserDictation()
+      }
+    } catch (error) {
+      const errMsg = error instanceof Error ? error.message : 'Voice input failed. Please try again.'
+      setVoiceError(errMsg)
+      setIsListening(false)
+      nativeModeRef.current = 'none'
+      await maybeStartWakeRecognition()
     }
   }
 
@@ -51,6 +502,25 @@ export function InputArea() {
           disabled={!connected}
           aria-label="Message input"
         />
+        <button
+          className={`voice-btn${isListening ? ' listening' : ''}`}
+          onClick={handleVoiceInput}
+          disabled={!voiceSupported || !connected || isStreaming}
+          aria-label={isListening ? 'Stop voice input' : 'Start voice input'}
+          title={isListening ? 'Stop voice input' : 'Voice input'}
+        >
+          {isListening ? (
+            <svg viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="6" width="12" height="12" rx="2" />
+            </svg>
+          ) : (
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+              <path d="M12 3a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z" />
+              <path d="M19 11a7 7 0 0 1-14 0" />
+              <path d="M12 18v3" />
+            </svg>
+          )}
+        </button>
         {isStreaming ? (
           <button
             className="send-btn stop-btn"
@@ -81,9 +551,13 @@ export function InputArea() {
           </span>
           {' '}/{' '}{maxLength}
         </span>
-        <span className="keyboard-hint">
-          Press <kbd>Enter</kbd> to send, <kbd>Shift+Enter</kbd> for new line
-        </span>
+        {voiceError ? (
+          <span className="voice-error" role="status">{voiceError}</span>
+        ) : (
+          <span className="keyboard-hint">
+            Press <kbd>Enter</kbd> to send, <kbd>Shift+Enter</kbd> for new line
+          </span>
+        )}
       </div>
     </div>
   )

@@ -1966,7 +1966,7 @@ a {
   margin: 0 auto;
   display: flex;
   gap: var(--space-sm);
-  align-items: flex-end;
+  align-items: center;
 }
 
 .input-container textarea {
@@ -2030,6 +2030,47 @@ a {
   height: 20px;
 }
 
+.voice-btn {
+  width: 48px;
+  height: 48px;
+  margin-left: calc(var(--space-lg) - var(--space-sm));
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-secondary);
+  transition: all var(--transition-fast);
+}
+
+.voice-btn:hover:not(:disabled) {
+  border-color: var(--accent-cyan);
+  color: var(--accent-cyan);
+  box-shadow: var(--glow-cyan);
+}
+
+.voice-btn:active:not(:disabled) {
+  transform: scale(0.95);
+}
+
+.voice-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.voice-btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.voice-btn.listening {
+  color: #fff;
+  border-color: #ff4444;
+  background: linear-gradient(135deg, #ff4444, #cc2222);
+  box-shadow: 0 0 15px rgba(255, 68, 68, 0.3);
+}
+
 .send-btn.stop-btn {
   background: linear-gradient(135deg, #ff4444, #cc2222);
   box-shadow: 0 0 15px rgba(255, 68, 68, 0.3);
@@ -2064,6 +2105,10 @@ a {
   border-radius: 4px;
   font-family: var(--font-mono);
   font-size: 0.6875rem;
+}
+
+.voice-error {
+  color: var(--accent-amber);
 }
 
 /* ===== Right Panel ===== */
@@ -4036,6 +4081,11 @@ body.capacitor-mobile .send-btn {
   height: 52px;
 }
 
+body.capacitor-mobile .voice-btn {
+  width: 52px;
+  height: 52px;
+}
+
 /* Always show delete buttons on mobile (no hover) */
 body.capacitor-mobile .session-delete {
   opacity: 0.6;
@@ -4085,6 +4135,10 @@ body.capacitor-mobile.keyboard-visible .chat-area {
   }
 
   .send-btn:hover:not(:disabled) {
+    transform: none;
+  }
+
+  .voice-btn:hover:not(:disabled) {
     transform: none;
   }
 
@@ -5503,4 +5557,3 @@ body.capacitor-mobile .context-menu-divider {
   background: var(--border-subtle);
   margin: var(--space-xs) 0;
 }
-
